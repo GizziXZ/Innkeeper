@@ -1,15 +1,15 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
-const session = require('express-session');
 const config = require('./config.json');
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// TODO - login system, using a free mongodb database
+// TODO - Home page
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
@@ -18,10 +18,15 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
 
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(express.static(__dirname + '/public'));
 
 app.get('/', (req, res) => {
-    res.redirect('/login');
+    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) {
+        res.redirect('/home');
+    } else {
+        res.redirect('/login');
+    }
 })
 
 app.get('/login', (req, res) => {
@@ -30,7 +35,13 @@ app.get('/login', (req, res) => {
 })
 
 app.get('/home', (req, res) => {
-    res.render('home');
+    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home');
+    else res.redirect('/login');
+})
+
+app.get('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.redirect('/login');
 })
 
 app.get('/register', (req, res) => {
@@ -48,10 +59,6 @@ app.get('/register', (req, res) => {
  */
 const User = require('./models/users');
 
-async function CreateAccount(newUser) { //  REVIEW - function probably should be removed
-    await newUser.save();
-}
-
 app.post('/login', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
@@ -60,10 +67,8 @@ app.post('/login', async (req, res) => {
         const user = await User.findOne({ username })
         
         if (user) {
-            console.log(user);
-            
             if (bcrypt.compareSync(password, user.password)) {
-                const token = jwt.sign({ username }, 'test', { expiresIn: '1h' }); // NOTE - change jwt secret later
+                const token = jwt.sign({ username }, config.jwtSecret, { expiresIn: '4h' });
                 res.cookie('token', token, { httpOnly: true });
                 res.redirect('/home');
             } else {
@@ -102,7 +107,7 @@ app.post('/register', async (req, res) => {
                     password: hash,
                 });
 
-                await CreateAccount(newUser);
+                await newUser.save();
                 res.redirect('/login?message=' + encodeURIComponent("Account created successfully"));
             }
         } catch (err) {

@@ -7,7 +7,38 @@
     <title>Home</title>
 </head>
 <body>
-    <h2>Home</h2>
-    <p>Welcome <%= locals.username %></p>
-    <!-- <a href="/logout">Logout</a> -->
+    <div class="container">
+        <aside class="sidebar">
+            <div class="server-list">
+                <div class="server">S1</div>
+                <div class="server">S2</div>
+                <div class="server">S3</div>
+            </div>
+            <div class="channel-list">
+                <h2>Channels</h2>
+                <ul>
+                    <li># general</li>
+                    <li># random</li>
+                    <li># help</li>
+                </ul>
+            </div>
+        </aside>
+        <main class="content">
+            <header>
+                <h1># general</h1>
+            </header>
+            <section class="messages">
+                <div class="message">
+                    <p><strong>User1:</strong> Hello, everyone!</p>
+                </div>
+                <div class="message">
+                    <p><strong>User2:</strong> Hi User1!</p>
+                </div>
+            </section>
+            <footer>
+                <input type="text" placeholder="Type a message...">
+            </footer>
+        </main>
+    </div>
 </body>
+</html>
