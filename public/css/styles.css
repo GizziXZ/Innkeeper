@@ -42,12 +42,22 @@ input[type="password"] {
     border-radius: 4px;
 }
 
+#success-message {
+    color: limegreen;
+    font-size: 17px;
+}
+
+.error-message {
+    color: crimson;
+    font-size: 14px;
+}
+
 a {
     text-decoration: none;
     position: absolute;
     color: crimson;
     margin-left: -200px;
-    margin-top: 243px;
+    margin-top: 260px;
     font: small-caption;
     font-size: larger;
 }

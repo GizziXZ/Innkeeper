@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
 const session = require('express-session');
 const config = require('./config.json');
 const socketio = require('socket.io');
@@ -10,7 +11,7 @@ const app = express();
 
 // TODO - login system, using a free mongodb database
 
-mongoose.connect(config.mongooseConnection + '/usersDB', {
+mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 });
@@ -24,7 +25,12 @@ app.get('/', (req, res) => {
 })
 
 app.get('/login', (req, res) => {
-    res.render('login');
+    const message = req.query.message;
+    res.render('login', {message});
+})
+
+app.get('/home', (req, res) => {
+    res.render('home');
 })
 
 app.get('/register', (req, res) => {
@@ -33,26 +39,48 @@ app.get('/register', (req, res) => {
 
 // SECTION - POST requests
 
+/**
+ * @typedef {import('mongoose').Model} UserModel
+ */
+
+/**
+ * @type {UserModel}
+ */
 const User = require('./models/users');
 
-async function CreateAccount(newUser) {
-    console.log('Account created');
+async function CreateAccount(newUser) { //  REVIEW - function probably should be removed
     await newUser.save();
-    console.log('Account saved');
 }
 
-app.post('/login', (req, res) => {
-
-});
-
-app.post('/register', (req, res) => {
+app.post('/login', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    const newUser = new User({
-        username: username,
-        password: password,
-    });
+    try {
+        const user = await User.findOne({ username })
+        
+        if (user) {
+            console.log(user);
+            
+            if (bcrypt.compareSync(password, user.password)) {
+                const token = jwt.sign({ username }, 'test', { expiresIn: '1h' }); // NOTE - change jwt secret later
+                res.cookie('token', token, { httpOnly: true });
+                res.redirect('/home');
+            } else {
+                res.redirect('/login?message=' + encodeURIComponent('Invalid username or password'));
+            }
+        } else {
+            res.redirect('/login?message=' + encodeURIComponent('Invalid username or password'));
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.post('/register', async (req, res) => {
+    const username = req.body.username;
+    const password = req.body.password;
 
     if (!username.length || username.substring(0,1) === ' ' || !username.replace((/\s/g, '').length)) { // If username is empty or starts with a space or is all spaces then return error
         const usernameError = 'Username must be atleast 1 character, not start with a space or be all spaces.'
@@ -62,12 +90,20 @@ app.post('/register', (req, res) => {
         return res.render('register', {passwordError})
     } else {
         try {
-            if (User.find({username}).size < 0) {
+            const existingUser = await User.findOne({ username: username });
+            if (existingUser) {
                 const usernameError = 'Username already exists'
                 return res.render('register', {usernameError})
             } else {
-                CreateAccount(newUser);
-                // res.redirect('/login?message=' + encodeURIComponent("Account created successfully"));
+                const hash = bcrypt.hashSync(password, 10)
+
+                const newUser = new User({
+                    username: username,
+                    password: hash,
+                });
+
+                await CreateAccount(newUser);
+                res.redirect('/login?message=' + encodeURIComponent("Account created successfully"));
             }
         } catch (err) {
             console.error(err);
