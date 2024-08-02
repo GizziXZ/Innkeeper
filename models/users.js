@@ -7,7 +7,7 @@ const UsersSchema = new mongoose.Schema({
     },
     tag: {
         type: String,
-        required: true
+        required: false //NOTE - change to true later once we have a tag system
     },
     password: {
         type: String,

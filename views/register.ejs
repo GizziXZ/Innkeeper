@@ -4,21 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="/css/styles.css">
-    <title>Login</title>
+    <title>Register</title>
 </head>
 <body>
-    <h2>Login</h2>
-    <form action="/login" method="POST">
+    <h2>Register</h2>
+    <form action="/register" method="POST">
         <div>
+            <span class="error-message" id="username-error"><%= locals.usernameError %></span>
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required>
         </div>
         <div>
+            <span class="error-message" id="password-error"><%= locals.passwordError %></span><br>
             <label for="password">Password:</label>
             <input type="password" id="password" name="password" required>
         </div>
-        <button type="submit">Login</button>
+        <button type="submit">Register</button>
     </form>
-    <a href="/register">Register</a>
+    <a href="/login">Login</a>
 </body>
 </html>
