@@ -35,7 +35,7 @@ app.get('/login', (req, res) => {
 })
 
 app.get('/home', (req, res) => {
-    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home');
+    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home', {username: jwt.decode(req.cookies.token).username});
     else res.redirect('/login');
 })
 

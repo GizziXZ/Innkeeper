@@ -9,27 +9,28 @@
 <body>
     <div class="container">
         <aside class="sidebar">
-            <div class="server-list">
-                <div class="server">S1</div>
-                <div class="server">S2</div>
-                <div class="server">S3</div>
-            </div>
             <div class="channel-list">
-                <h2>Channels</h2>
+                <h2>Direct Messages</h2>
                 <ul>
-                    <li># general</li>
-                    <li># random</li>
-                    <li># help</li>
+                    <li>User1</li>
+                    <li>User2</li>
+                    <li>User3</li>
                 </ul>
+                <h4><%=username%></h4>
+                <button class="add-user-button" onclick="addUser()">Add User</button>
             </div>
         </aside>
         <main class="content">
             <header>
-                <h1># general</h1>
+                <h1>username</h1>
+                <div class="header-buttons">
+                    <button onclick="window.location.href='/profile'">Profile</button>
+                    <button onclick="window.location.href='/logout'">Logout</button>
+                </div>
             </header>
             <section class="messages">
                 <div class="message">
-                    <p><strong>User1:</strong> Hello, everyone!</p>
+                    <p><strong>User1:</strong> Hello!</p>
                 </div>
                 <div class="message">
                     <p><strong>User2:</strong> Hi User1!</p>
@@ -40,5 +41,34 @@
             </footer>
         </main>
     </div>
+
+    <!-- Add User Modal -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Add User</h2>
+            <input type="text" id="usernameInput" placeholder="Enter username">
+            <button onclick="submitUser()" id="add-button">Add</button>
+        </div>
+    </div>
+
+    <script>
+        function addUser() {
+            document.getElementById('addUserModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('addUserModal').style.display = 'none';
+        }
+
+        function submitUser() {
+            const username = document.getElementById('usernameInput').value;
+            if (username) {
+                // Add logic to handle adding the user
+                alert('User ' + username + ' added!');
+                closeModal();
+            }
+        }
+    </script>
 </body>
 </html>
