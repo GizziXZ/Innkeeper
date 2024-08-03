@@ -48,6 +48,20 @@ app.get('/register', (req, res) => {
     res.render('register');
 })
 
+app.get('/friend-requests', async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    
+    try {
+        const user = await User.findOne({ username }).populate('friendRequests');
+        console.log('sent friend request');
+        
+        return res.status(200).json(user.friendRequests);
+    } catch (err) {
+        console.error(err);
+        return res.status(500);
+    }
+})
+
 // SECTION - POST requests
 
 /**
@@ -69,13 +83,15 @@ app.post('/login', async (req, res) => {
         if (user) {
             if (bcrypt.compareSync(password, user.password)) {
                 const token = jwt.sign({ username }, config.jwtSecret, { expiresIn: '4h' });
-                res.cookie('token', token, { httpOnly: true });
+                res.cookie('token', token, { httpOnly: false }); // making it httponly is kind of unsafe, but we need to access it from the client side to generate the private key client side
                 res.redirect('/home');
             } else {
-                res.redirect('/login?message=' + encodeURIComponent('Invalid username or password'));
+                const Error = 'Invalid username or password';
+                res.render('login', {Error});
             }
         } else {
-            res.redirect('/login?message=' + encodeURIComponent('Invalid username or password'));
+            const Error = 'Invalid username or password';
+            res.render('login', {Error});
         }
     } catch (err) {
         console.error(err);
@@ -105,6 +121,8 @@ app.post('/register', async (req, res) => {
                 const newUser = new User({
                     username: username,
                     password: hash,
+                    friends: [],
+                    friendRequests: [],
                 });
 
                 await newUser.save();
@@ -116,5 +134,38 @@ app.post('/register', async (req, res) => {
         }
     }
 });
+
+app.post('/add-friend', async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    const friendUsername = req.body.friend;
+    
+    try {
+        const user = await User.findOne({ username });
+        const friend = await User.findOne({ username: friendUsername });
+
+        if (!user || !friend) return res.status(404).send();
+        if (username === friendUsername) return res.status(400).send();
+        if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) {
+            friend.friendRequests.push(username);
+            await friend.save();
+            return res.status(200).send();
+        } else if (user.friendRequests.includes(friendUsername)) {
+            user.friends.push(friendUsername);
+            friend.friends.push(username);
+            user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
+            friend.friendRequests = friend.friendRequests.filter(f => f !== username);
+            await user.save();
+            await friend.save();
+            return res.status(200).send();
+        } else if (friend.friendRequests.includes(username)) {
+            // do nothing
+            return res.status(200).send();
+        } else {
+            return res.status(400).send();
+        }
+    } catch (err) {
+        console.error(err)
+    }
+})
 
 app.listen(80)

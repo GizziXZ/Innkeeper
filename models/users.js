@@ -13,6 +13,14 @@ const UsersSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    friends: {
+        type: Array,
+        required: false
+    },
+    friendRequests: {
+        type: Array,
+        required: false
+    },
     createdAt: {
         type: Date,
         default: Date.now

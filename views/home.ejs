@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <aside class="sidebar">
-            <div class="channel-list">
+            <div class="chat-list">
                 <h2>Direct Messages</h2>
                 <ul>
                     <li>User1</li>
@@ -17,6 +17,7 @@
                     <li>User3</li>
                 </ul>
                 <h4><%=username%></h4>
+                <button class="friends-button" onclick="friends()">Friend Requests</button>
                 <button class="add-user-button" onclick="addUser()">Add User</button>
             </div>
         </aside>
@@ -42,7 +43,7 @@
         </main>
     </div>
 
-    <!-- Add User Modal -->
+    <!-- Modals -->
     <div id="addUserModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
@@ -52,20 +53,74 @@
         </div>
     </div>
 
+    <div id="friendsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Friend Requests</h2>
+            <ul>
+                <!-- <li>Request</li> -->
+            </ul>
+        </div>
+    </div>
+
     <script>
+        async function friends() {
+            document.getElementById('friendsModal').style.display = 'block';
+
+            try {
+                const response = await fetch('/friend-requests');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch friend requests');
+                }
+
+                const friends = await response.json();
+                const friendsList = document.querySelector('#friendsModal ul');
+                friendsList.innerHTML = ''; // Clear existing list items
+
+                friends.forEach(friend => {
+                    const li = document.createElement('li');
+                    li.textContent = friend.username; // Assuming the friend object has a username field
+                    friendsList.appendChild(li);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
         function addUser() {
             document.getElementById('addUserModal').style.display = 'block';
         }
 
         function closeModal() {
             document.getElementById('addUserModal').style.display = 'none';
+            document.getElementById('friendsModal').style.display = 'none';
         }
 
-        function submitUser() {
+        async function submitUser() {
             const username = document.getElementById('usernameInput').value;
+            
             if (username) {
-                // Add logic to handle adding the user
-                alert('User ' + username + ' added!');
+                console.log(username);
+                
+                const response = await fetch('/add-friend', {
+                    method: 'POST',
+                    credentials: "include",
+                    body: `friend=${encodeURIComponent(username)}`,
+                    headers: {
+                        'Content-type': 'application/x-www-form-urlencoded', // applcation/json doesn't work, i don't know why, i don't care why, i just want it to work. it's 7:40 am and i haven't slept
+                    },
+                })
+                console.log(response);
+                
+                if (response.ok) {
+                    alert('User ' + username + ' added!');
+                } else if (response.status === 404) {
+                    alert('User ' + username + ' not found!');
+                } else if (response.status === 400) {
+                    alert('User ' + username + ' is already a friend!');
+                } else {
+                    alert('Error adding user ' + username);
+                }
                 closeModal();
             }
         }

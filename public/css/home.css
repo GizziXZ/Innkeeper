@@ -30,7 +30,7 @@ body {
     position: absolute;
     font-family: monospace;
     font-size: 16px;
-    bottom: 35px;
+    bottom: 45px;
 }
 
 .server-list {
@@ -54,28 +54,28 @@ body {
     font-weight: bold;
 }
 
-.channel-list {
+.chat-list {
     padding: 10px;
-    flex-grow: 1; /* Allow the channel list to grow and fill the remaining space */
+    flex-grow: 1; /* Allow the chat list to grow and fill the remaining space */
 }
 
-.channel-list h2 {
+.chat-list h2 {
     color: #b9bbbe;
     font-size: 1.2em;
     margin-bottom: 10px;
 }
 
-.channel-list ul {
+.chat-list ul {
     list-style: none;
     padding: 0;
 }
 
-.channel-list ul li {
+.chat-list ul li {
     padding: 5px 0;
     cursor: pointer;
 }
 
-.channel-list ul li:hover {
+.chat-list ul li:hover {
     background-color: #3a3c43;
 }
 
@@ -141,6 +141,19 @@ footer input {
     border-radius: 5px;
     background-color: #2f3136;
     color: #dcddde;
+}
+
+.friends-button {
+    background-color: #5865f2;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    position: absolute;
+    bottom: 50px;
+    right: 10px;
+    width: 30%
 }
 
 .add-user-button {
