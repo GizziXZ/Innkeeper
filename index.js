@@ -16,10 +16,12 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
     useUnifiedTopology: true,
 });
 
+// middleware stuff or somethign idk
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(__dirname + '/public'));
+app.use(require('./middleware/refreshToken.js'));
 
 app.get('/', (req, res) => {
     if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) {
@@ -35,8 +37,20 @@ app.get('/login', (req, res) => {
 })
 
 app.get('/home', (req, res) => {
+    // just makes it so that if the token is expired it will redirect to the login page
+    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) {
+        res.clearCookie('token');
+        return res.redirect('/login');
+    }
+    
+    // if the token is valid then it will render the home page
     if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home', {username: jwt.decode(req.cookies.token).username});
-    else res.redirect('/login');
+    else {
+        res.clearCookie('token');
+        return res.redirect('/login');
+    }
+
+
 })
 
 app.get('/logout', (req, res) => {
