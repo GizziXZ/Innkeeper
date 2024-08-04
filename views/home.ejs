@@ -43,7 +43,7 @@
                 </div> -->
             </section>
             <footer>
-                <input type="text" placeholder="Type a message...">
+                <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off">
             </footer>
         </main>
     </div>
@@ -68,7 +68,42 @@
         </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script>
+        var socket = io({
+            auth: {
+                token: document.cookie.split('=')[1]
+            }
+        }); // connect to the server        
+        const messageInput = document.getElementById('messageInput');
+        const messagesContainer = document.querySelector('.messages');
+
+        messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        socket.on('message', (message) => { // receive message from server
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.innerHTML = `<p><strong>${message.sender}:</strong> ${message.text}</p>`;
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+        });
+
+        function sendMessage() { // send message to server
+            const message = messageInput.value;
+            if (message) {
+                socket.emit('message', { // send message to server
+                    text: message,
+                    sender: document.cookie.split('=')[1],
+                    recipient: document.getElementById('currentChat').textContent,
+                });
+                messageInput.value = ''; // clear the input field
+            }
+        }
+
         refresh(); // refresh the chat list
         async function refresh() {
             try {
@@ -90,7 +125,6 @@
                     li.addEventListener('click', () => { // switch the chat to the selected friend
                         document.getElementById('currentChat').textContent = friend;
                         // going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
-                        const messagesContainer = document.querySelector('.messages');
                         messagesContainer.innerHTML = ''; // Clear existing messages
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu

@@ -1,21 +1,45 @@
 const express = require('express');
+const http = require('http');
 const bcrypt = require('bcrypt');
 const config = require('./config.json');
-const socketio = require('socket.io'); // you will be implemented one day, my friend, i promise
+const { Server } = require('socket.io'); // you will be implemented one day, my friend, i promise
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
 // TODO - chat system (and also i can use socketio to make the friend request notifications)
+// TODO - add user is typing feature
+// TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 });
+
+io.on('connection', (socket) => { //NOTE - the sender is a jwt token, verify the sender and verify the recipient is a friend of the sender
+    // console.log(socket.rooms);
+    try {
+        socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
+        if (!socket.username) return socket.disconnect();
+        console.log(socket.username + ' connected');
+        socket.on('message', (msg) => {
+            if (msg.recipient) {
+                const recipient = msg.recipient;
+                if (socket.username === recipient) return;
+                io.to(recipient).emit('message', msg); // doesn't really work yet
+            }
+            console.log(msg);
+        })
+    } catch (err) {
+        console.error(err);
+    }
+})
 
 // middleware stuff or somethign idk
 app.set('view engine', 'ejs');
@@ -238,4 +262,5 @@ app.post('/friend-requests', async (req, res) => {
     }
 })
 
-app.listen(80)
+// app.listen(80);
+server.listen(80);
