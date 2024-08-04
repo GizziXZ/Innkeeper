@@ -9,8 +9,6 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// REVIEW - experiment with like 20 friends, see if you can add a scrollbar to the friends list
-// TODO - remove friends functionality
 // TODO - chat system (and also i can use socketio to make the friend request notifications)
 // TODO - better css for the login and register pages
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
@@ -191,6 +189,25 @@ app.post('/add-friend', async (req, res) => {
         }
     } catch (err) {
         console.error(err)
+    }
+})
+
+app.post('/remove-friend', async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    const friendUsername = req.body.friend;
+    
+    try {
+        const user = await User.findOne({ username });
+        const friend = await User.findOne({ username: friendUsername });
+
+        user.friends = user.friends.filter(f => f !== friendUsername);
+        friend.friends = friend.friends.filter(f => f !== username);
+        await user.save();
+        await friend.save();
+        return res.status(200).send();
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send();
     }
 })
 

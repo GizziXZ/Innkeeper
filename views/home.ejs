@@ -14,6 +14,11 @@
                 <ul>
                     <!-- <li>User</li> -->
                 </ul>
+                <div id="context-menu" class="context-menu">
+                    <ul>
+                        <li id="remove-friend" onclick="removeFriend()">Remove Friend</li>
+                    </ul>
+                </div>
             </div>
             <div class="user-actions">
                 <h4><%=username%></h4>
@@ -25,7 +30,7 @@
             <header>
                 <h1 id="currentChat"></h1>
                 <div class="header-buttons">
-                    <button onclick="window.location.href='/profile'">Profile</button>
+                    <!-- <button onclick="window.location.href='/profile'">Profile</button> -->
                     <button onclick="window.location.href='/logout'">Logout</button>
                 </div>
             </header>
@@ -64,9 +69,11 @@
     </div>
 
     <script>
-        try {
-            (async () => {
+        refresh(); // refresh the chat list
+        async function refresh() {
+            try {
                 const chatlist = document.querySelector('.chat-list ul');
+                chatlist.innerHTML = ''; // Clear existing list items
                 let response = await fetch('/friends', { // Fetch the list of friends from the server
                     method: 'GET',
                     credentials: "include",
@@ -80,20 +87,32 @@
                 friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const li = document.createElement('li');
                     li.textContent = friend;
-                    li.addEventListener('click', () => switchChat(friend)); // add an event listener to switch the chat to the selected friend
+                    li.addEventListener('click', (friend) => { // switch the chat to the selected friend
+                        document.getElementById('currentChat').textContent = friend;
+                        // going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
+                        const messagesContainer = document.querySelector('.messages');
+                        messagesContainer.innerHTML = ''; // Clear existing messages
+                    });
+                    li.addEventListener('contextmenu', (event) => { // right click to open context menu
+                        event.preventDefault();
+                        const contextMenu = document.getElementById('context-menu');
+                        contextMenu.style.display = 'block';
+                        contextMenu.style.left = event.clientX + 'px';
+                        contextMenu.style.top = event.clientY + 'px';
+                        contextMenu.friend = friend;
+                    });
                     chatlist.appendChild(li);
                 });
-            })();
-        } catch (err) {
-            console.error(err);
-        }
 
-        function switchChat(friend) {
-            // switch the chat to the selected friend
-            document.getElementById('currentChat').textContent = friend;
-            // going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
-            const messagesContainer = document.querySelector('.messages');
-            messagesContainer.innerHTML = ''; // Clear existing messages
+                document.addEventListener('click', (event) => { // close context menu when clicking outside of it
+                    const contextMenu = document.getElementById('context-menu');
+                    if (event.target !== contextMenu && !contextMenu.contains(event.target)) {
+                        contextMenu.style.display = 'none';
+                    }
+                });
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         async function friends() {
@@ -153,9 +172,36 @@
                 const friendsList = document.querySelector('#friendsModal ul');
                 friendsList.innerHTML = ''; // might not be necessary tbh
                 friends(); // refresh the friend requests
+                refresh(); // refresh the chat list
             } catch (err) {
                 console.error(err);
             }
+        }
+
+        async function removeFriend(friend) {
+            try {
+                const contextMenu = document.getElementById('context-menu');
+                const response = await fetch('/remove-friend', {
+                    method: 'POST',
+                    credentials: "include",
+                    body: `friend=${encodeURIComponent(contextMenu.friend)}`,
+                    headers: {
+                        'Content-type': 'application/x-www-form-urlencoded',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to remove friend');
+                }
+
+                contextMenu.style.display = 'none';
+                const chatlist = document.querySelector('.chat-list ul');
+                chatlist.innerHTML = ''; // Clear existing list items
+                refresh();
+            } catch (err) {
+                console.error(err);
+            }
+            
         }
 
         function addUser() { // used to display the add friend modal
