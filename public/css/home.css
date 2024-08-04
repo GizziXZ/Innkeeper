@@ -134,6 +134,15 @@ header h1 {
     margin-bottom: 10px;
 }
 
+#typingIndicator {
+    display: none;
+    color: #b9bbbe;
+    font-family: monospace;
+    font-size: 0.8em;
+    margin-bottom: 5px;
+    margin-left: 10px;
+}
+
 footer {
     background-color: #40444b;
     padding: 6px;

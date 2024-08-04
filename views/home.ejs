@@ -42,6 +42,7 @@
                     <p><strong>User2:</strong> Hi User1!</p>
                 </div> -->
             </section>
+            <p id="typingIndicator"></p>
             <footer>
                 <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off">
             </footer>
@@ -84,12 +85,29 @@
             }
         });
 
+        messageInput.addEventListener('input', () => { // send typing event to server
+            socket.emit('typing', document.getElementById('currentChat').textContent);
+        });
+
         socket.on('message', (message) => { // receive message from server
+            // console.log(message);
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             messageElement.innerHTML = `<p><strong>${message.sender}:</strong> ${message.text}</p>`;
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+        });
+
+        socket.on('typing', (sender) => {
+            if (sender !== document.getElementById('currentChat').textContent) return; // only show typing indicator if the sender is the current chat
+            const typingIndicator = document.getElementById('typingIndicator');
+            typingIndicator.innerText = `${sender} is typing...`;
+            typingIndicator.style.display = 'block';
+
+            // Hide the typing indicator after a few seconds
+            setTimeout(() => {
+                typingIndicator.style.display = 'none';
+            }, 3000);
         });
 
         function sendMessage() { // send message to server

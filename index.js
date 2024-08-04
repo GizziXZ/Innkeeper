@@ -13,7 +13,6 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // TODO - chat system (and also i can use socketio to make the friend request notifications)
-// TODO - add user is typing feature
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -22,8 +21,8 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
     useUnifiedTopology: true,
 });
 
-io.on('connection', (socket) => { //NOTE - the sender is a jwt token, verify the sender and verify the recipient is a friend of the sender
-    console.log(socket.rooms);
+io.on('connection', (socket) => {
+    // console.log(socket.rooms);
     try {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
@@ -31,18 +30,29 @@ io.on('connection', (socket) => { //NOTE - the sender is a jwt token, verify the
         socket.on('message', async (msg) => {
             // console.log(msg);
             const recipient = msg.recipient;
+            msg.sender = socket.username;
             if (recipient) {
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;
-                const room = io.sockets.adapter.rooms.get(`${socket.username}-${recipient}`) || io.sockets.adapter.rooms.get(`${recipient}-${socket.username}`);
-                io.to(room).emit('message', msg.text); // doesn't really work yet
+                const room = io.sockets.adapter.rooms.has(`${socket.username}-${recipient}`) ? `${socket.username}-${recipient}` : `${recipient}-${socket.username}`; // honestly there is definitely a better way to make rooms but if it works it works
+                // console.log(room);
+                io.to(room).emit('message', msg);
+            }
+        })
+        socket.on('typing', async (recipient) => {
+            const sender = socket.username;
+            if (recipient) {
+                const friend = await User.findOne({ username: recipient });
+                if (!friend.friends.includes(sender)) return;
+                const room = io.sockets.adapter.rooms.has(`${sender}-${recipient}`) ? `${sender}-${recipient}` : `${recipient}-${sender}`;
+                io.to(room).emit('typing', sender);
             }
         })
         socket.on('open-room', async (username) => { // username parameter is the friend's username
             const user = await User.findOne({ username: socket.username });
             const friend = await User.findOne({ username });
             if (!user.friends.includes(username) || !friend.friends.includes(socket.username)) return;            
-            const existingRoom = io.sockets.adapter.rooms.get(`${socket.username}-${username}`) || io.sockets.adapter.rooms.get(`${username}-${socket.username}`);
+            const existingRoom = io.sockets.adapter.rooms.has(`${socket.username}-${username}`) ? `${socket.username}-${username}` : `${username}-${socket.username}`;
             if (existingRoom) {
                 socket.join(existingRoom);
             } else {
@@ -205,11 +215,11 @@ app.post('/add-friend', async (req, res) => {
 
         if (!user || !friend) return res.status(404).send();
         if (username === friendUsername) return res.status(400).send();
-        if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) {
+        if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
             friend.friendRequests.push(username);
             await friend.save();
             return res.status(200).send();
-        } else if (user.friendRequests.includes(friendUsername)) {
+        } else if (user.friendRequests.includes(friendUsername)) { // if the friend has already sent a friend request to the user, then accept the friend request
             user.friends.push(friendUsername);
             friend.friends.push(username);
             user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
