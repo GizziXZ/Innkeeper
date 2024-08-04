@@ -87,7 +87,7 @@
                 friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const li = document.createElement('li');
                     li.textContent = friend;
-                    li.addEventListener('click', (friend) => { // switch the chat to the selected friend
+                    li.addEventListener('click', () => { // switch the chat to the selected friend
                         document.getElementById('currentChat').textContent = friend;
                         // going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
                         const messagesContainer = document.querySelector('.messages');

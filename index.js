@@ -10,7 +10,6 @@ const jwt = require('jsonwebtoken');
 const app = express();
 
 // TODO - chat system (and also i can use socketio to make the friend request notifications)
-// TODO - better css for the login and register pages
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {

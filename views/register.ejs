@@ -11,11 +11,11 @@
     <form action="/register" method="POST">
         <div>
             <span class="error-message" id="username-error"><%= locals.usernameError %></span>
+            <span class="error-message" id="password-error"><%= locals.passwordError %></span><br>
             <label for="username">Username:</label>
             <input type="text" id="username" name="username" required>
         </div>
         <div>
-            <span class="error-message" id="password-error"><%= locals.passwordError %></span><br>
             <label for="password">Password:</label>
             <input type="password" id="password" name="password" required>
         </div>

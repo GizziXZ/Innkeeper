@@ -5,7 +5,7 @@ const UsersSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    tag: {
+    discriminator: {
         type: String,
         required: false //NOTE - change to true later once we have a tag system
     },

@@ -2,7 +2,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
+    background-color: #4E5D94;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -11,17 +11,19 @@ body {
 }
 
 h2 {
+    color: #23272A;
     text-align: center;
     position: relative;
     left: -20px;
 }
 
 form {
-    background: #fff;
+    background: #23272A;
     padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     width: 300px;
+    display: block;
 }
 
 div {
@@ -29,16 +31,19 @@ div {
 }
 
 label {
+    color: #808080;
     display: block;
     margin-bottom: 5px;
 }
 
 input[type="text"],
 input[type="password"] {
+    background-color: #40444b;
+    color: floralwhite;
     width: 100%;
     padding: 8px;
     box-sizing: border-box;
-    border: 1px solid #ccc;
+    border: 1px solid #202225;
     border-radius: 4px;
 }
 
@@ -55,9 +60,10 @@ input[type="password"] {
 a {
     text-decoration: none;
     position: absolute;
-    color: crimson;
-    margin-left: -200px;
-    margin-top: 260px;
+    color: aliceblue;
+    margin-left: -190px;
+    margin-top: 270px;
+    display: block;
     font: small-caption;
     font-size: larger;
 }
@@ -69,7 +75,7 @@ a:hover {
 button {
     width: 100%;
     padding: 10px;
-    background-color: #5cb85c;
+    background-color: #3a973a;
     border: none;
     border-radius: 4px;
     color: white;
@@ -78,5 +84,5 @@ button {
 }
 
 button:hover {
-    background-color: #4cae4c;
+    background-color: #318331;
 }
