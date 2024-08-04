@@ -183,7 +183,7 @@ footer input:focus {
     height: 10px;
     background-color: red;
     border-radius: 50%;
-    visibility: hidden;
+    display: none;
 }
 
 .add-user-button {

@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const bcrypt = require('bcrypt');
 const config = require('./config.json');
-const { Server } = require('socket.io'); // you will be implemented one day, my friend, i promise
+const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
@@ -11,8 +11,9 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+const userSockets = {};
 
-// TODO - chat system (and also i can use socketio to make the friend request notifications)
+// TODO - better chat css (stop autoscrolling on new message too) + home screen for when you have no friends or chats open + error message for when messages aren't sent
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -21,12 +22,19 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
     useUnifiedTopology: true,
 });
 
+// SECTION - Socket.io
 io.on('connection', (socket) => {
-    // console.log(socket.rooms);
     try {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
-        console.log(socket.username + ' connected');
+        // console.log(socket.username + ' connected');
+        userSockets[socket.username] = socket.id;
+
+        socket.on('disconnect',  () => {
+            // console.log(socket.username + ' disconnected');
+            delete userSockets[socket.username];
+        })
+
         socket.on('message', async (msg) => {
             // console.log(msg);
             const recipient = msg.recipient;
@@ -39,8 +47,13 @@ io.on('connection', (socket) => {
                 io.to(room).emit('message', msg);
             }
         })
+        let typingUsers = new Set();
         socket.on('typing', async (recipient) => {
             const sender = socket.username;
+            // deny any other typing events from the sender temporarily for performance reasons
+            if (typingUsers.has(sender)) return;
+            typingUsers.add(sender);
+            setTimeout(() => typingUsers.delete(sender), 3000);
             if (recipient) {
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(sender)) return;
@@ -63,6 +76,8 @@ io.on('connection', (socket) => {
         console.error(err);
     }
 })
+
+//!SECTION
 
 // middleware stuff or somethign idk
 app.set('view engine', 'ejs');
@@ -104,15 +119,9 @@ app.get('/register', (req, res) => {
 })
 
 app.get('/friend-requests', async (req, res) => {
-    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) {
-        res.clearCookie('token');
-        return res.redirect('/login');
-    }
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
-    
     try {
         const user = await User.findOne({ username }).populate('friendRequests');
-        
         return res.status(200).send(user.friendRequests);
     } catch (err) {
         console.error(err);
@@ -124,7 +133,6 @@ app.get('/friends', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     try {
         const user = await User.findOne({ username }).populate('friends');
-        
         return res.status(200).send(user.friends);
     } catch (err) {
         console.error(err);
@@ -218,6 +226,7 @@ app.post('/add-friend', async (req, res) => {
         if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
             friend.friendRequests.push(username);
             await friend.save();
+            io.to(userSockets[friendUsername]).emit('friend-request', username);
             return res.status(200).send();
         } else if (user.friendRequests.includes(friendUsername)) { // if the friend has already sent a friend request to the user, then accept the friend request
             user.friends.push(friendUsername);
@@ -226,6 +235,7 @@ app.post('/add-friend', async (req, res) => {
             friend.friendRequests = friend.friendRequests.filter(f => f !== username);
             await user.save();
             await friend.save();
+            io.to(userSockets[friendUsername]).emit('refresh');
             return res.status(200).send();
         } else if (friend.friendRequests.includes(username)) {
             // do nothing
@@ -250,6 +260,7 @@ app.post('/remove-friend', async (req, res) => {
         friend.friends = friend.friends.filter(f => f !== username);
         await user.save();
         await friend.save();
+        io.to(userSockets[friendUsername]).emit('refresh');
         return res.status(200).send();
     } catch (err) {
         console.error(err);
@@ -269,11 +280,12 @@ app.post('/friend-requests', async (req, res) => {
             user.friends.push(friendUsername);
             friend.friends.push(username);
             user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
-            friend.friendRequests = friend.friendRequests.filter(f => f !== username); // just to be safe
+            friend.friendRequests = friend.friendRequests.filter(f => f !== username); // not necessary but just to be safe
             await user.save();
             await friend.save();
+            io.to(userSockets[friendUsername]).emit('refresh');
             return res.status(200).send();
-        } else {
+        } else { // if the user declines the friend request
             const user = await User.findOne({ username });
             user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
             await user.save();
