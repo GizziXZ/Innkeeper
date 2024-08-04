@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const config = require('./config.json');
-const socketio = require('socket.io');
+const socketio = require('socket.io'); // you will be implemented one day, my friend, i promise
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
@@ -9,7 +9,11 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// TODO - friendship system
+// REVIEW - experiment with like 20 friends, see if you can add a scrollbar to the friends list
+// TODO - remove friends functionality
+// TODO - chat system (and also i can use socketio to make the friend request notifications)
+// TODO - better css for the login and register pages
+// TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
@@ -22,6 +26,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(__dirname + '/public'));
 app.use(require('./middleware/refreshToken.js'));
+app.use(require('./middleware/checkExpiration.js'));
 
 app.get('/', (req, res) => {
     if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) {
@@ -37,20 +42,12 @@ app.get('/login', (req, res) => {
 })
 
 app.get('/home', (req, res) => {
-    // just makes it so that if the token is expired it will redirect to the login page
-    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) {
-        res.clearCookie('token');
-        return res.redirect('/login');
-    }
-    
     // if the token is valid then it will render the home page
     if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home', {username: jwt.decode(req.cookies.token).username});
     else {
         res.clearCookie('token');
         return res.redirect('/login');
     }
-
-
 })
 
 app.get('/logout', (req, res) => {
@@ -73,6 +70,18 @@ app.get('/friend-requests', async (req, res) => {
         const user = await User.findOne({ username }).populate('friendRequests');
         
         return res.status(200).send(user.friendRequests);
+    } catch (err) {
+        console.error(err);
+        return res.status(500);
+    }
+})
+
+app.get('/friends', async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    try {
+        const user = await User.findOne({ username }).populate('friends');
+        
+        return res.status(200).send(user.friends);
     } catch (err) {
         console.error(err);
         return res.status(500);
@@ -186,10 +195,6 @@ app.post('/add-friend', async (req, res) => {
 })
 
 app.post('/friend-requests', async (req, res) => {
-    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) { // NOTE - ngl maybe this should be a middleware
-        res.clearCookie('token');
-        return res.redirect('/login');
-    }
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     

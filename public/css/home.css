@@ -54,6 +54,10 @@ body {
     font-weight: bold;
 }
 
+.user-actions {
+    padding: 10px;
+}
+
 .chat-list {
     padding: 10px;
     flex-grow: 1; /* Allow the chat list to grow and fill the remaining space */
@@ -96,6 +100,7 @@ header {
 
 header h1 {
     margin: 0;
+    font-family: monospace;
     font-size: 1.5em;
     color: #fff;
 }
@@ -154,6 +159,17 @@ footer input {
     bottom: 50px;
     right: 10px;
     width: 30%
+}
+
+.notification-circle {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 10px;
+    height: 10px;
+    background-color: red;
+    border-radius: 50%;
+    visibility: hidden; /* Initially hidden */
 }
 
 .add-user-button {
