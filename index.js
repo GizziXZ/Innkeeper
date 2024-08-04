@@ -23,18 +23,31 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
 });
 
 io.on('connection', (socket) => { //NOTE - the sender is a jwt token, verify the sender and verify the recipient is a friend of the sender
-    // console.log(socket.rooms);
+    console.log(socket.rooms);
     try {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
         console.log(socket.username + ' connected');
-        socket.on('message', (msg) => {
-            if (msg.recipient) {
-                const recipient = msg.recipient;
-                if (socket.username === recipient) return;
-                io.to(recipient).emit('message', msg); // doesn't really work yet
+        socket.on('message', async (msg) => {
+            // console.log(msg);
+            const recipient = msg.recipient;
+            if (recipient) {
+                const friend = await User.findOne({ username: recipient });
+                if (!friend.friends.includes(socket.username)) return;
+                const room = io.sockets.adapter.rooms.get(`${socket.username}-${recipient}`) || io.sockets.adapter.rooms.get(`${recipient}-${socket.username}`);
+                io.to(room).emit('message', msg.text); // doesn't really work yet
             }
-            console.log(msg);
+        })
+        socket.on('open-room', async (username) => { // username parameter is the friend's username
+            const user = await User.findOne({ username: socket.username });
+            const friend = await User.findOne({ username });
+            if (!user.friends.includes(username) || !friend.friends.includes(socket.username)) return;            
+            const existingRoom = io.sockets.adapter.rooms.get(`${socket.username}-${username}`) || io.sockets.adapter.rooms.get(`${username}-${socket.username}`);
+            if (existingRoom) {
+                socket.join(existingRoom);
+            } else {
+                socket.join(`${socket.username}-${username}`);
+            }
         })
     } catch (err) {
         console.error(err);

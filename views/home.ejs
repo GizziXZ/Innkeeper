@@ -70,11 +70,11 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        var socket = io({
+        var socket = io({ // connect to the server
             auth: {
                 token: document.cookie.split('=')[1]
             }
-        }); // connect to the server        
+        });
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
 
@@ -124,8 +124,10 @@
                     li.textContent = friend;
                     li.addEventListener('click', () => { // switch the chat to the selected friend
                         document.getElementById('currentChat').textContent = friend;
-                        // going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
+                        // NOTE - going to make it so that the messages are saved only on the client side if possible for max privacy but transported using the server (once socket.io is implemented)
                         messagesContainer.innerHTML = ''; // Clear existing messages
+                        messageInput.focus();
+                        socket.emit('open-room', friend);
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();
