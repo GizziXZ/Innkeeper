@@ -195,6 +195,33 @@ footer input {
     cursor: pointer;
 }
 
+.modal-content li {
+    font-size: 24px;
+    padding: 3px;
+}
+
+.friend-request-button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.accept-button {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+.reject-button {
+    background-color: #f44336; /* Red */
+    color: white;
+}
+
+.friend-request-button:hover {
+    opacity: 0.8;
+}
+
 #usernameInput {
     padding: 8px;
     border: none;

@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// TODO - Home page
+// TODO - friendship system
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
@@ -63,13 +63,16 @@ app.get('/register', (req, res) => {
 })
 
 app.get('/friend-requests', async (req, res) => {
+    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) {
+        res.clearCookie('token');
+        return res.redirect('/login');
+    }
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     
     try {
         const user = await User.findOne({ username }).populate('friendRequests');
-        console.log('sent friend request');
         
-        return res.status(200).json(user.friendRequests);
+        return res.status(200).send(user.friendRequests);
     } catch (err) {
         console.error(err);
         return res.status(500);
@@ -179,6 +182,38 @@ app.post('/add-friend', async (req, res) => {
         }
     } catch (err) {
         console.error(err)
+    }
+})
+
+app.post('/friend-requests', async (req, res) => {
+    if (jwt.decode(req.cookies.token).exp * 1000 < Date.now()) { // NOTE - ngl maybe this should be a middleware
+        res.clearCookie('token');
+        return res.redirect('/login');
+    }
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    const friendUsername = req.body.friend;
+    
+    try {
+        if (req.body.accept === 'true') {
+            const user = await User.findOne({ username });
+            const friend = await User.findOne({ username: friendUsername });
+
+            user.friends.push(friendUsername);
+            friend.friends.push(username);
+            user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
+            friend.friendRequests = friend.friendRequests.filter(f => f !== username); // just to be safe
+            await user.save();
+            await friend.save();
+            return res.status(200).send();
+        } else {
+            const user = await User.findOne({ username });
+            user.friendRequests = user.friendRequests.filter(f => f !== friendUsername);
+            await user.save();
+            return res.status(200).send();
+        }
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send();
     }
 })
 

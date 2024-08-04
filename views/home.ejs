@@ -78,10 +78,47 @@
                 friendsList.innerHTML = ''; // Clear existing list items
 
                 friends.forEach(friend => {
-                    const li = document.createElement('li');
-                    li.textContent = friend.username; // Assuming the friend object has a username field
+                    const li = document.createElement('li');                    
+                    li.textContent = friend;
+
+                    const acceptButton = document.createElement('button');
+                    acceptButton.textContent = 'Accept';
+                    acceptButton.classList.add('friend-request-button', 'accept-button');
+                    acceptButton.addEventListener('click', () => handleFriendRequest(friend, true));
+
+                    const rejectButton = document.createElement('button');
+                    rejectButton.textContent = 'Reject';
+                    rejectButton.classList.add('friend-request-button', 'reject-button');
+                    rejectButton.addEventListener('click', () => handleFriendRequest(friend, false));
+                    
+                    li.appendChild(acceptButton);
+                    li.appendChild(rejectButton);
                     friendsList.appendChild(li);
                 });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function handleFriendRequest(friend, accept) {
+            try {
+                const response = await fetch('/friend-requests', {
+                    method: 'POST',
+                    credentials: "include",
+                    body: `friend=${encodeURIComponent(friend)}&accept=${accept}`,
+                    headers: {
+                        'Content-type': 'application/x-www-form-urlencoded',
+                    },
+                });
+console.log(response);
+
+                if (!response.ok) {
+                    throw new Error('Failed to handle friend request');
+                }
+
+                const friendsList = document.querySelector('#friendsModal ul');
+                friendsList.innerHTML = ''; // might not be necessary tbh
+                friends();
             } catch (err) {
                 console.error(err);
             }
