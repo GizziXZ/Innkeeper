@@ -35,16 +35,28 @@
                 </div>
             </header>
             <section class="messages">
-                <!-- <div class="message">
-                    <p><strong>User1:</strong> Hello!</p>
+                <div class="welcome-message">
+                    <h2>Welcome to Innkeeper!</h2>
+                    <p>It looks like you haven't started a chat yet or you don't have any friends added.</p>
+                    <p>Here are some tips to get started:</p>
+                    <ul>
+                        <li>Click on the "Add User" button to add new friends.</li>
+                        <li>Once you have friends, click on their names to start chatting.</li>
+                        <li>Use the "Friend Requests" button to manage your friend requests.</li>
+                    </ul>
+                    <button class="add-friend-button" onclick="addUser()">Add Your First Friend</button>
                 </div>
-                <div class="message">
-                    <p><strong>User2:</strong> Hi User1!</p>
+                <!-- <div class="message">
+                    <div class="message-header">
+                        <span class="message-user">User1</span>
+                        <span class="message-time">10:30 AM</span>
+                    </div>
+                    <p class="message-content">Hello!</p>
                 </div> -->
             </section>
             <p id="typingIndicator"></p>
             <footer>
-                <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off">
+                <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off" disabled>
             </footer>
         </main>
     </div>
@@ -91,15 +103,20 @@
 
         socket.on('message', (message) => { // receive message from server
             // console.log(message);
+            message.date = new Date();
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
-            messageElement.innerHTML = `<p><strong>${message.sender}:</strong> ${message.text}</p>`;
+            messageElement.innerHTML = `<div class="message-header">
+                        <span class="message-user">${message.sender}</span>
+                        <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                    </div>
+                    <p class="message-content">${message.text}</p>`;
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
             document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
             // save the messages locally instead of on the server for privacy
             const currentChat = document.getElementById('currentChat').textContent;
-            const messages = JSON.parse(localStorage.getItem(currentChat)) || [];
+            const messages = JSON.parse(localStorage.getItem(currentChat)) || []; //FIXME - the saved messages are loaded when on another account
             messages.push(message);
             localStorage.setItem(currentChat, JSON.stringify(messages));
         });
@@ -124,6 +141,10 @@
         socket.on('refresh', () => { // refresh the chat list when a friend is removed or a request is accepted
             refresh();
         });
+
+        document.getElementsByClassName('messages')[0].addEventListener('click', () => { // focus on the chat input, for convenience
+            messageInput.focus();
+        })
 
         function sendMessage() { // send message to server
             const message = messageInput.value;
@@ -156,6 +177,9 @@
                     const li = document.createElement('li');
                     li.textContent = friend;
                     li.addEventListener('click', () => { // switch the chat to the selected friend
+                        messageInput.removeAttribute('disabled'); // enable the message input field
+                        document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
+                        document.getElementsByClassName('welcome-message')[0].style.display = 'none'; // hide the welcome message
                         if (currentChat.textContent === friend) return; // don't switch if the chat is already open
                         currentChat.textContent = friend;
                         messagesContainer.innerHTML = ''; // Clear existing messages
@@ -163,7 +187,11 @@
                         messages.forEach(message => {
                             const messageElement = document.createElement('div');
                             messageElement.classList.add('message');
-                            messageElement.innerHTML = `<p><strong>${message.sender}:</strong> ${message.text}</p>`;
+                            messageElement.innerHTML = `<div class="message-header">
+                        <span class="message-user">${message.sender}</span>
+                        <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                        </div>
+                        <p class="message-content">${message.text}</p>`;
                             messagesContainer.appendChild(messageElement);
                         });
                         messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages

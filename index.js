@@ -13,7 +13,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const userSockets = {};
 
-// TODO - better chat css (stop autoscrolling on new message too) + home screen for when you have no friends or chats open + error message for when messages aren't sent
+// TODO - better chat css + online status + error message for when messages aren't sent
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -40,6 +40,7 @@ io.on('connection', (socket) => {
             const recipient = msg.recipient;
             msg.sender = socket.username;
             if (recipient) {
+                msg.text = msg.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;
                 const room = io.sockets.adapter.rooms.has(`${socket.username}-${recipient}`) ? `${socket.username}-${recipient}` : `${recipient}-${socket.username}`; // honestly there is definitely a better way to make rooms but if it works it works
@@ -73,6 +74,7 @@ io.on('connection', (socket) => {
             }
         })
     } catch (err) {
+        if (err instanceof jwt.TokenExpiredError) return;
         console.error(err);
     }
 })
