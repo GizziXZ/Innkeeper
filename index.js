@@ -14,7 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const userSockets = {};
 
-// TODO - better chat css + online status + message receiving outside of chat and notification for new messages
+// TODO - better chat css + message receiving outside of chat and notification for new messages
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -29,24 +29,30 @@ io.on('connection', async (socket) => {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
         // console.log(socket.username + ' connected');
-        userSockets[socket.username] = socket.id;
+        userSockets[socket.username] = socket.id; // idk if i need this variable but it might be useful
 
         // on connection make the user online (this code is definitely awful, something tells me having one too many asyncs and awaits isnt good)
         const user = await User.findOne({ username: socket.username });
         user.online = true;
-        user.save();
+        await user.save();
         const friends = user.friends;
         const onlineFriends = friends.filter(friend => userSockets[friend]);
-        onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('online', socket.username));
+        onlineFriends.forEach(friend => {
+            io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
+            io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
+        });
 
-        socket.on('disconnect',  async () => {
+        socket.on('disconnect', () => {
             // console.log(socket.username + ' disconnected');
-            const user = await User.findOne({ username: socket.username });
-            user.online = false;
-            await user.save();
             delete userSockets[socket.username];
+            setTimeout(async () => { // to avoid the user being marked as offline when they are just refreshing, cheap solution but idgaf it took me too long to figure out where the bug was (it was whenever you refreshed, the user would be marked as offline and some other weird doodly doo)
+                if (userSockets[socket.username]) return;
+                const user = await User.findOne({ username: socket.username });
+                user.online = false;
+                await user.save();
+                onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
+            }, 1500);
         })
-
         socket.on('message', async (msg) => {
             // console.log(msg);
             if (!msg.recipient || !msg.text) return;

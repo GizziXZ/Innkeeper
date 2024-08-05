@@ -83,6 +83,8 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        let refreshPromise = null;
+        refresh(); // refresh the chat list
         var socket = io({ // connect to the server
             auth: {
                 token: document.cookie.split('=')[1]
@@ -116,7 +118,7 @@
             document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
             // save the messages locally instead of on the server for privacy
             const currentChat = document.getElementById('currentChat').textContent;
-            const messages = JSON.parse(localStorage.getItem(currentChat)) || []; //FIXME - the saved messages are loaded when on another account
+            const messages = JSON.parse(localStorage.getItem(currentChat)) || [];
             messages.push(message);
             localStorage.setItem(currentChat, JSON.stringify(messages));
         });
@@ -153,6 +155,27 @@
             refresh();
         });
 
+        socket.on('online', async (friend) => { // show online status when a friend is online
+            if (refreshPromise) await refreshPromise;
+            const chatlist = document.querySelector('.chat-list ul');
+            const friends = chatlist.getElementsByTagName('li');
+            for (let i = 0; i < friends.length; i++) {
+                if (friends[i].textContent === friend) {
+                    friends[i].style.color = 'green';
+                }
+            }
+        });
+
+        socket.on('offline', (friend) => { // show offline status when a friend is offline
+            const chatlist = document.querySelector('.chat-list ul');
+            const friends = chatlist.getElementsByTagName('li');
+            for (let i = 0; i < friends.length; i++) {
+                if (friends[i].textContent === friend) {
+                    friends[i].style.color = 'white';
+                }
+            }
+        });
+
         document.getElementsByClassName('messages')[0].addEventListener('click', () => { // focus on the chat input, for convenience
             messageInput.focus();
         })
@@ -169,11 +192,12 @@
             }
         }
 
-        async function refresh() {
+        function refresh() {
             try {
+                refreshPromise = new Promise(async (resolve) => {
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
-                chatlist.innerHTML = ''; // Clear existing list items
+                // chatlist.innerHTML = ''; // Clear existing list items
                 let response = await fetch('/friends', { // Fetch the list of friends from the server
                     method: 'GET',
                     credentials: "include",
@@ -184,8 +208,11 @@
                 }
 
                 let friends = await response.json();
-                friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
+                await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const li = document.createElement('li');
+                    const notificationCircle = document.createElement('span');
+                    notificationCircle.classList.add('notification-circle');
+                    
                     li.textContent = friend;
                     li.addEventListener('click', () => { // switch the chat to the selected friend
                         messageInput.removeAttribute('disabled'); // enable the message input field
@@ -198,10 +225,10 @@
                             const messageElement = document.createElement('div');
                             messageElement.classList.add('message');
                             messageElement.innerHTML = `<div class="message-header">
-                        <span class="message-user">${message.sender}</span>
-                        <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                        </div>
-                        <p class="message-content">${message.text}</p>`;
+                                <span class="message-user">${message.sender}</span>
+                                <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                                </div>
+                                <p class="message-content">${message.text}</p>`;
                             messagesContainer.appendChild(messageElement);
                         });
                         messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
@@ -225,6 +252,8 @@
                         contextMenu.style.display = 'none';
                     }
                 });
+                resolve();
+            })
             } catch (err) {
                 console.error(err);
             }
@@ -358,7 +387,6 @@
                 closeModal();
             }
         }
-        refresh(); // refresh the chat list
     </script>
 </body>
 </html>
