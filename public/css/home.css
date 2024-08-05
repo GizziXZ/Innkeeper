@@ -259,6 +259,16 @@ footer input:focus {
     display: none;
 }
 
+.message-notification-circle {
+    position: absolute;
+    height: 10px;
+    width: 10px;
+    margin-left: 4px;
+    margin-top: 5px;
+    background-color: #4CAF50;
+    border-radius: 50%;
+}
+
 .add-user-button {
     background-color: #5865f2;
     color: #fff;

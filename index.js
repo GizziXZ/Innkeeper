@@ -14,7 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const userSockets = {};
 
-// TODO - better chat css + message receiving outside of chat and notification for new messages
+// TODO - better chat css
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -29,7 +29,7 @@ io.on('connection', async (socket) => {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
         // console.log(socket.username + ' connected');
-        userSockets[socket.username] = socket.id; // idk if i need this variable but it might be useful
+        userSockets[socket.username] = socket.id; // idk if i need this variable but it might be useful (at some point)
 
         // on connection make the user online (this code is definitely awful, something tells me having one too many asyncs and awaits isnt good)
         const user = await User.findOne({ username: socket.username });
@@ -38,6 +38,8 @@ io.on('connection', async (socket) => {
         const friends = user.friends;
         const onlineFriends = friends.filter(friend => userSockets[friend]);
         onlineFriends.forEach(friend => {
+            const room = [socket.username, friend].sort().join('-');
+            socket.join(room); // join a room with the user and their friend
             io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
             io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
         });
@@ -63,7 +65,7 @@ io.on('connection', async (socket) => {
                 msg.id = uuid() // assign a unique id to the message
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;
-                const room = io.sockets.adapter.rooms.has(`${socket.username}-${recipient}`) ? `${socket.username}-${recipient}` : `${recipient}-${socket.username}`; // honestly there is definitely a better way to make rooms but if it works it works
+                const room = [socket.username, recipient].sort().join('-');
                 // console.log(msg.id);
                 io.to(room).emit('message', msg);
                 if ((await io.in(room).fetchSockets()).length < 2) { // if there is only one person in the room
@@ -85,17 +87,17 @@ io.on('connection', async (socket) => {
                 io.to(room).emit('typing', sender);
             }
         })
-        socket.on('open-room', async (username) => { // username parameter is the friend's username
-            const user = await User.findOne({ username: socket.username });
-            const friend = await User.findOne({ username });
-            if (!user.friends.includes(username) || !friend.friends.includes(socket.username)) return;            
-            const existingRoom = io.sockets.adapter.rooms.has(`${socket.username}-${username}`) ? `${socket.username}-${username}` : `${username}-${socket.username}`;
-            if (existingRoom) {
-                socket.join(existingRoom);
-            } else {
-                socket.join(`${socket.username}-${username}`);
-            }
-        })
+        // socket.on('open-room', async (username) => { // username parameter is the friend's username
+        //     const user = await User.findOne({ username: socket.username });
+        //     const friend = await User.findOne({ username });
+        //     if (!user.friends.includes(username) || !friend.friends.includes(socket.username)) return;            
+        //     const existingRoom = io.sockets.adapter.rooms.has(`${socket.username}-${username}`) ? `${socket.username}-${username}` : `${username}-${socket.username}`;
+        //     if (existingRoom) {
+        //         socket.join(existingRoom);
+        //     } else {
+        //         socket.join(`${socket.username}-${username}`);
+        //     }
+        // })
     } catch (err) {
         if (err instanceof jwt.TokenExpiredError) return;
         console.error(err);
@@ -214,8 +216,8 @@ app.post('/register', async (req, res) => {
         return res.render('register', {passwordError})
     } else {
         try {
-            const existingUser = await User.findOne({ username: username });
-            if (existingUser) {
+            const existingUser = await User.findOne({ username: username }); 
+            if (existingUser && existingUser.username == username) { // just so that they can't change capitalization and create an account with the same username
                 const usernameError = 'Username already exists'
                 return res.render('register', {usernameError})
             } else {
