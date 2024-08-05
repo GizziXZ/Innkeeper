@@ -3,6 +3,7 @@ const http = require('http');
 const bcrypt = require('bcrypt');
 const config = require('./config.json');
 const { Server } = require('socket.io');
+const {v4: uuid} = require('uuid');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
@@ -13,7 +14,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 const userSockets = {};
 
-// TODO - better chat css + online status + error message for when messages aren't sent
+// TODO - better chat css + online status + message receiving outside of chat and notification for new messages
 // TODO - key generation system for message encryption
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
@@ -23,29 +24,45 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
 });
 
 // SECTION - Socket.io
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     try {
         socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
         if (!socket.username) return socket.disconnect();
         // console.log(socket.username + ' connected');
         userSockets[socket.username] = socket.id;
 
-        socket.on('disconnect',  () => {
+        // on connection make the user online (this code is definitely awful, something tells me having one too many asyncs and awaits isnt good)
+        const user = await User.findOne({ username: socket.username });
+        user.online = true;
+        user.save();
+        const friends = user.friends;
+        const onlineFriends = friends.filter(friend => userSockets[friend]);
+        onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('online', socket.username));
+
+        socket.on('disconnect',  async () => {
             // console.log(socket.username + ' disconnected');
+            const user = await User.findOne({ username: socket.username });
+            user.online = false;
+            await user.save();
             delete userSockets[socket.username];
         })
 
         socket.on('message', async (msg) => {
             // console.log(msg);
+            if (!msg.recipient || !msg.text) return;
             const recipient = msg.recipient;
             msg.sender = socket.username;
             if (recipient) {
                 msg.text = msg.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
+                msg.id = uuid() // assign a unique id to the message
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;
                 const room = io.sockets.adapter.rooms.has(`${socket.username}-${recipient}`) ? `${socket.username}-${recipient}` : `${recipient}-${socket.username}`; // honestly there is definitely a better way to make rooms but if it works it works
-                // console.log(room);
+                // console.log(msg.id);
                 io.to(room).emit('message', msg);
+                if ((await io.in(room).fetchSockets()).length < 2) { // if there is only one person in the room
+                    io.to(userSockets[socket.username]).emit('message-error', msg);
+                }
             }
         })
         let typingUsers = new Set();
