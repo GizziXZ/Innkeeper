@@ -14,8 +14,8 @@ const server = http.createServer(app);
 const io = new Server(server);
 const userSockets = {};
 
-// TODO - better chat css
-// TODO - key generation system for message encryption
+// TODO - image uploading
+// TODO - key generation system, check if there's already a saved key, if not then generate a new one for both users
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
@@ -55,6 +55,14 @@ io.on('connection', async (socket) => {
                 onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
             }, 1500);
         })
+        socket.on('diffie-hellman', (data) => {
+            // console.log(data);
+            if (!data.publicKey || !data.recipient) return;
+            const recipient = data.recipient;
+            if (recipient) {
+                io.to(userSockets[recipient]).emit('diffie-hellman', {publicKey: data.publicKey, sender: socket.username});
+            }
+        })
         socket.on('message', async (msg) => {
             // console.log(msg);
             if (!msg.recipient || !msg.text) return;
@@ -83,7 +91,7 @@ io.on('connection', async (socket) => {
             if (recipient) {
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(sender)) return;
-                const room = io.sockets.adapter.rooms.has(`${sender}-${recipient}`) ? `${sender}-${recipient}` : `${recipient}-${sender}`;
+                const room = [socket.username, recipient].sort().join('-');
                 io.to(room).emit('typing', sender);
             }
         })

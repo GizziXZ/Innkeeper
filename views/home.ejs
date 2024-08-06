@@ -82,7 +82,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script>
+    <script> // SECTION - Client-side JavaScript
         let refreshPromise = null;
         refresh(); // refresh the chat list
         var socket = io({ // connect to the server
@@ -90,8 +90,66 @@
                 token: document.cookie.split('=')[1]
             }
         });
+        const { subtle } = window.crypto;
+        let userPrivateKey, userPublicKey, sharedSecret;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
+
+        //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
+        async function generateKeyPair() {
+            const keyPair = await subtle.generateKey({
+                name: "ECDH",
+                namedCurve: "P-256"
+            }, true, ["deriveKey"]);
+            userPrivateKey = keyPair.privateKey;
+            userPublicKey = keyPair.publicKey;
+            return keyPair.publicKey;
+        }
+
+        async function exportPublicKey(key) {
+            const exported = await subtle.exportKey("raw", key);
+            return btoa(String.fromCharCode(...new Uint8Array(exported)));
+        }
+
+        async function importPublicKey(base64Key) {
+            const binary = atob(base64Key);
+            const keyData = new Uint8Array([...binary].map(char => char.charCodeAt(0)));
+            return subtle.importKey("raw", keyData, {
+                name: "ECDH",
+                namedCurve: "P-256"
+            }, true, []);
+        }
+
+        async function deriveSharedSecret(otherPublicKey) {
+            sharedSecret = await subtle.deriveKey({
+                name: "ECDH",
+                public: otherPublicKey
+            }, userPrivateKey, {
+                name: "AES-GCM",
+                length: 256
+            }, false, ["encrypt", "decrypt"]);
+        }
+
+        async function encryptMessage(message) {
+            const encoded = new TextEncoder().encode(message);
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const ciphertext = await subtle.encrypt({
+                name: "AES-GCM",
+                iv // FIXME - there's an error here, the iv is not being used correctly but it's almost 4 am so i'm going to bed and fixing this tomorrow
+            }, sharedSecret, encoded);
+            return { iv: btoa(String.fromCharCode(...iv)), ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))) };
+        }
+
+        async function decryptMessage(iv, ciphertext) {
+            const ivArray = new Uint8Array([...atob(iv)].map(char => char.charCodeAt(0)));
+            const ciphertextArray = new Uint8Array([...atob(ciphertext)].map(char => char.charCodeAt(0)));
+            const decrypted = await subtle.decrypt({
+                name: "AES-GCM",
+                iv: ivArray
+            }, sharedSecret, ciphertextArray);
+            return new TextDecoder().decode(decrypted);
+        }
+        //!SECTION
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
             if (event.key === 'Enter') {
@@ -103,8 +161,21 @@
             socket.emit('typing', document.getElementById('currentChat').textContent);
         });
 
-        socket.on('message', (message) => { // receive message from server
+        socket.on('diffie-hellman', async (data) => { // receive public key from other user and derive shared secret
+            const otherUserPublicKey = await importPublicKey(data.key);
+            console.log(otherUserPublicKey);
+            await deriveSharedSecret(otherUserPublicKey);
+        });
+
+        socket.on('message', async (message) => { // receive message from server
             // console.log(message);
+            (async () => { // generate key pair and derive shared secret
+                const userPublicKey = await generateKeyPair();
+                const exportedPublicKey = await exportPublicKey(userPublicKey);
+                socket.emit('diffie-hellman', { key: await exportPublicKey(userPublicKey), recipient: currentChat.textContent}); // Send `exportedPublicKey` to the other user through the server
+            })();
+            const decryptedMessage = await decryptMessage(message.text.iv, message.text.ciphertext);
+            message.text = decryptedMessage;
             message.date = new Date();
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
@@ -193,11 +264,12 @@
             messageInput.focus();
         })
 
-        function sendMessage() {
+        async function sendMessage() {
             const message = messageInput.value;
             if (message) {
+                const { iv, ciphertext } = await encryptMessage(message);
                 socket.emit('message', { // send message to server
-                    text: message,
+                    text: { iv, ciphertext },
                     sender: document.cookie.split('=')[1],
                     recipient: document.getElementById('currentChat').textContent,
                 });
