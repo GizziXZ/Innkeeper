@@ -96,59 +96,26 @@
         const messagesContainer = document.querySelector('.messages');
 
         //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
-        async function generateKeyPair() {
-            const keyPair = await subtle.generateKey({
-                name: "ECDH",
-                namedCurve: "P-256"
-            }, true, ["deriveKey"]);
-            userPrivateKey = keyPair.privateKey;
-            userPublicKey = keyPair.publicKey;
-            return keyPair.publicKey;
-        }
-
-        async function exportPublicKey(key) {
-            const exported = await subtle.exportKey("raw", key);
-            return btoa(String.fromCharCode(...new Uint8Array(exported)));
-        }
-
-        async function importPublicKey(base64Key) {
-            const binary = atob(base64Key);
-            const keyData = new Uint8Array([...binary].map(char => char.charCodeAt(0)));
-            return subtle.importKey("raw", keyData, {
-                name: "ECDH",
-                namedCurve: "P-256"
-            }, true, []);
-        }
-
-        async function deriveSharedSecret(otherPublicKey) {
-            sharedSecret = await subtle.deriveKey({
-                name: "ECDH",
-                public: otherPublicKey
-            }, userPrivateKey, {
-                name: "AES-GCM",
-                length: 256
-            }, false, ["encrypt", "decrypt"]);
-        }
-
-        async function encryptMessage(message) {
-            const encoded = new TextEncoder().encode(message);
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const ciphertext = await subtle.encrypt({
-                name: "AES-GCM",
-                iv // FIXME - there's an error here, the iv is not being used correctly but it's almost 4 am so i'm going to bed and fixing this tomorrow
-            }, sharedSecret, encoded);
-            return { iv: btoa(String.fromCharCode(...iv)), ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))) };
-        }
-
-        async function decryptMessage(iv, ciphertext) {
-            const ivArray = new Uint8Array([...atob(iv)].map(char => char.charCodeAt(0)));
-            const ciphertextArray = new Uint8Array([...atob(ciphertext)].map(char => char.charCodeAt(0)));
-            const decrypted = await subtle.decrypt({
-                name: "AES-GCM",
-                iv: ivArray
-            }, sharedSecret, ciphertextArray);
-            return new TextDecoder().decode(decrypted);
-        }
+        (async () => {
+            if (!localStorage.getItem('userPrivatekey')) {
+                await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + request public keys from the database for every friend that you don't have their public key for)
+                name: 'RSA-OAEP',
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+                hash: 'SHA-256',
+                }, true, ["encrypt","decrypt"],).then(keyPair => {
+                    userPrivateKey = keyPair.privateKey;
+                    userPublicKey = keyPair.publicKey;
+                })
+                localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
+                socket.emit('public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
+            }
+            // await subtle.encrypt({ // encrypt a message
+            //     name: 'RSA-OAEP',
+            // }, userPublicKey, new TextEncoder().encode('test')).then(encrypted => {
+            //     console.log(encrypted);
+            // });
+        })();
         //!SECTION
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
@@ -159,12 +126,6 @@
 
         messageInput.addEventListener('input', () => { // send typing event to server
             socket.emit('typing', document.getElementById('currentChat').textContent);
-        });
-
-        socket.on('diffie-hellman', async (data) => { // receive public key from other user and derive shared secret
-            const otherUserPublicKey = await importPublicKey(data.key);
-            console.log(otherUserPublicKey);
-            await deriveSharedSecret(otherUserPublicKey);
         });
 
         socket.on('message', async (message) => { // receive message from server

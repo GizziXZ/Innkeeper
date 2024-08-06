@@ -55,13 +55,10 @@ io.on('connection', async (socket) => {
                 onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
             }, 1500);
         })
-        socket.on('diffie-hellman', (data) => {
-            // console.log(data);
-            if (!data.publicKey || !data.recipient) return;
-            const recipient = data.recipient;
-            if (recipient) {
-                io.to(userSockets[recipient]).emit('diffie-hellman', {publicKey: data.publicKey, sender: socket.username});
-            }
+        socket.on('public-key', async (publicKey) => {
+            // console.log(publicKey);
+            user.publicKey = publicKey;
+            await user.save();
         })
         socket.on('message', async (msg) => {
             // console.log(msg);
