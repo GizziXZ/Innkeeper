@@ -56,17 +56,17 @@ io.on('connection', async (socket) => {
             }, 1500);
         })
         socket.on('save-public-key', async (publicKey) => {
-            // console.log(publicKey);
+            console.log(publicKey);
             console.log(socket.username + ' has a public key');
             user.publicKey = publicKey;
             await user.save();
         })
         socket.on('request-public-key', async (username) => {
-            console.log('no public key');
+            console.log('no public key found for ' + username);
             const friend = await User.findOne({ username });
             if (!friend) return;
             if (friend.friends.includes(socket.username)) {
-                io.to(userSockets[username]).emit('public-key', {friend: username, publicKey: user.publicKey});
+                io.to(userSockets[socket.username]).emit('public-key', {friend: username, publicKey: user.publicKey});
             }
         })
         socket.on('message', async (msg) => {

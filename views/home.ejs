@@ -84,7 +84,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <script> // SECTION - Client-side JavaScript
         let refreshPromise = null;
-        refresh(); // refresh the chat list
         var socket = io({ // connect to the server
             auth: {
                 token: document.cookie.split('=')[1]
@@ -94,30 +93,34 @@
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
+        //FIXME - socket.emits are not working here, only on the gizzi account for some reason?
 
         //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
-        (async () => {
+        socket.on('connect', async () => {
+            console.log('connected');
             if (!localStorage.getItem('userPrivateKey')) {
-                await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + request public keys from the database for every friend that you don't have their public key for)
-                name: 'RSA-OAEP',
-                modulusLength: 2048,
-                publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
-                hash: 'SHA-256',
-                }, true, ["encrypt","decrypt"],).then(keyPair => {
-                    userPrivateKey = keyPair.privateKey;
-                    userPublicKey = keyPair.publicKey;
-                })
-                localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
-                socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
+            const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + request public keys from the database for every friend that you don't have their public key for)
+            name: 'RSA-OAEP',
+            modulusLength: 2048,
+            publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+            hash: 'SHA-256',
+            }, true, ["encrypt","decrypt"]);
+            userPrivateKey = keyPair.privateKey;
+            userPublicKey = keyPair.publicKey;
+            localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
+            socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
             } else {
-                userPrivateKey = localStorage.getItem('userPrivateKey');
+                userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey')), { // import the private key from the local storage
+                    name: 'RSA-OAEP',
+                    hash: 'SHA-256',
+                }, true, ['decrypt']);
             }
-            // await subtle.encrypt({ // encrypt a message
-            //     name: 'RSA-OAEP',
-            // }, userPublicKey, new TextEncoder().encode('test')).then(encrypted => {
-            //     console.log(encrypted);
-            // });
-        })();
+        });
+        // await subtle.encrypt({ // encrypt a message
+        //     name: 'RSA-OAEP',
+        // }, userPublicKey, new TextEncoder().encode('test')).then(encrypted => {
+        //     console.log(encrypted);
+        // });
         //!SECTION
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
@@ -197,13 +200,6 @@
             notificationCircle.style.display = 'block';
         });
 
-        socket.on('public-key', (friend, publicKey) => { // save the public key of the friend in the local storage
-            if (!localStorage.getItem(friend)) {
-                localStorage.setItem(friend, JSON.stringify({ publicKey }));
-            }
-            localStorage.setItem(friend.publicKey, publicKey);
-        });
-
         socket.on('refresh', () => { // refresh the chat list when a friend is removed or a request is accepted
             refresh();
         });
@@ -251,7 +247,7 @@
             }
         }
 
-        function refresh() {
+        async function refresh() {
             try {
                 refreshPromise = new Promise(async (resolve) => {
                 const chatlist = document.querySelector('.chat-list ul');
@@ -270,6 +266,16 @@
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const localStorageFriend = localStorage.getItem(friend);
                     if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
+                    socket.on('public-key', (friend, publicKey) => { // save the public key of the friend in the local storage
+                        if (!localStorage.getItem(friend)) {
+                            localStorage.setItem(friend, JSON.stringify({ publicKey }));
+                        } else {
+                            const friendObject = JSON.parse(localStorage.getItem(friend));
+                            friendObject.publicKey = publicKey;
+                            localStorage.setItem(friend, JSON.stringify(friendObject));
+                        }
+                    });
+                    
                     const li = document.createElement('li');
                     const notificationCircle = document.createElement('span');
                     notificationCircle.classList.add('message-notification-circle');
@@ -466,6 +472,7 @@
                 closeModal();
             }
         }
+        refresh(); // refresh the chat list
     </script>
 </body>
 </html>
