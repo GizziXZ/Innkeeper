@@ -54,7 +54,7 @@ io.on('connection', async (socket) => {
                 const user = await User.findOne({ username: socket.username });
                 user.online = false;
                 await user.save();
-                const onlineFriends = friends.filter(friend => userSockets[friend]);
+                const onlineFriends = user.friends.filter(friend => userSockets[friend]);
                 onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
             }, 1500);
         })

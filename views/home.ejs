@@ -90,19 +90,37 @@
             }
         });
         const { subtle } = window.crypto;
+        let db;
         let userPrivateKey, userPublicKey;
+        const request = indexedDB.open('innkeeper', 1); 
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
 
-        //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
-            // console.log(socket);
+        request.onupgradeneeded = (event) => { // create the database if it doesn't exist
+            db = event.target.result;
+            if (!db.objectStoreNames.contains('keys')) {
+                db.createObjectStore('keys', { keyPath: 'username' });
+            }
+        }
 
-        // await subtle.encrypt({ // encrypt a message
-        //     name: 'RSA-OAEP',
-        // }, userPublicKey, new TextEncoder().encode('test')).then(encrypted => {
-        //     console.log(encrypted);
-        // });
-        //!SECTION
+        request.onsuccess = (event) => {
+            db = event.target.result;
+        };
+
+        request.onerror = (event) => {
+            console.error('IndexedDB error:', event.target.errorCode);
+        };
+
+        async function savePrivateKey(username, privateKey) {
+            const transaction = db.transaction(['keys'], 'readwrite');
+            const store = transaction.objectStore('keys');
+            const keys = {
+                username: username,
+                privateKey: await subtle.exportKey('jwk', privateKey),
+            };
+            console.log(store)
+            store.put(keys);
+        }
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
             if (event.key === 'Enter') {
@@ -116,18 +134,15 @@
 
         socket.on('public-key', (data) => { // save the public key of the friend in the local storage
             // console.log(JSON.stringify(data.publicKey));
-            let friendObject = localStorage.getItem(data.friend);
-            if (!friendObject) {
-                friendObject = {};
+            let publicKeys = localStorage.getItem('publicKeys');
+            if (publicKeys) {
+                publicKeys = JSON.parse(publicKeys);
             } else {
-                friendObject = JSON.parse(friendObject);
+                publicKeys = {};
             }
-            if (!friendObject.publicKey) {
-                friendObject.publicKey = data.publicKey;
-            }
-            console.log(friendObject);
-            localStorage.setItem(data.friend, JSON.stringify(friendObject));
-            console.log(localStorage.getItem(data.friend));
+            publicKeys[data.friend] = data.publicKey;
+            localStorage.setItem('publicKeys', JSON.stringify(publicKeys));
+            console.log(localStorage.getItem('publicKeys'));
         });
 
         socket.on('message', async (message) => { // receive message from server
@@ -246,6 +261,7 @@
 
         async function refresh() {
             try {
+                const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
                 if (!localStorage.getItem('userPrivateKey')) {
                     const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
                         name: 'RSA-OAEP',
@@ -255,10 +271,19 @@
                     }, true, ["encrypt","decrypt"]);
                     userPrivateKey = keyPair.privateKey;
                     userPublicKey = keyPair.publicKey;
-                    localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
+                    // let savedPrivateKeys = localStorage.getItem('userPrivateKey');
+                    // if (savedPrivateKeys) {
+                    //     savedPrivateKeys = JSON.parse(savedPrivateKeys);
+                    // } else {
+                    //     savedPrivateKeys = {};
+                    // }
+                    // savedPrivateKeys[username] = JSON.stringify(await subtle.exportKey('jwk', userPrivateKey)); // save the private key in the local storage
+                    // localStorage.setItem('userPrivateKey', JSON.stringify(savedPrivateKeys)); // save the private key in the local storage
+                    savePrivateKey(username, userPrivateKey);
                     socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
                 } else {
-                    userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey')), { // import the private key from the local storage
+                    console.log(JSON.parse(localStorage.getItem('userPrivateKey'))[username]);
+                    userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey'))[username], { // import the private key from the local storage
                         name: 'RSA-OAEP',
                         hash: 'SHA-256',
                     }, true, ['decrypt']);
