@@ -55,10 +55,19 @@ io.on('connection', async (socket) => {
                 onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
             }, 1500);
         })
-        socket.on('public-key', async (publicKey) => {
+        socket.on('save-public-key', async (publicKey) => {
             // console.log(publicKey);
+            console.log(socket.username + ' has a public key');
             user.publicKey = publicKey;
             await user.save();
+        })
+        socket.on('request-public-key', async (username) => {
+            console.log('no public key');
+            const friend = await User.findOne({ username });
+            if (!friend) return;
+            if (friend.friends.includes(socket.username)) {
+                io.to(userSockets[username]).emit('public-key', {friend: username, publicKey: user.publicKey});
+            }
         })
         socket.on('message', async (msg) => {
             // console.log(msg);

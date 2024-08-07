@@ -91,13 +91,13 @@
             }
         });
         const { subtle } = window.crypto;
-        let userPrivateKey, userPublicKey, sharedSecret;
+        let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
 
         //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
         (async () => {
-            if (!localStorage.getItem('userPrivatekey')) {
+            if (!localStorage.getItem('userPrivateKey')) {
                 await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + request public keys from the database for every friend that you don't have their public key for)
                 name: 'RSA-OAEP',
                 modulusLength: 2048,
@@ -108,7 +108,9 @@
                     userPublicKey = keyPair.publicKey;
                 })
                 localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
-                socket.emit('public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
+                socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
+            } else {
+                userPrivateKey = localStorage.getItem('userPrivateKey');
             }
             // await subtle.encrypt({ // encrypt a message
             //     name: 'RSA-OAEP',
@@ -130,12 +132,11 @@
 
         socket.on('message', async (message) => { // receive message from server
             // console.log(message);
-            (async () => { // generate key pair and derive shared secret
-                const userPublicKey = await generateKeyPair();
-                const exportedPublicKey = await exportPublicKey(userPublicKey);
-                socket.emit('diffie-hellman', { key: await exportPublicKey(userPublicKey), recipient: currentChat.textContent}); // Send `exportedPublicKey` to the other user through the server
-            })();
-            const decryptedMessage = await decryptMessage(message.text.iv, message.text.ciphertext);
+            const decryptedMessage = await subtle.decrypt({ // decrypt the message
+                name: 'RSA-OAEP',
+            }, userPrivateKey, new Uint8Array(Object.values(message.text))).then(decrypted => {
+                return new TextDecoder().decode(decrypted);
+            });
             message.text = decryptedMessage;
             message.date = new Date();
             const messageElement = document.createElement('div');
@@ -156,8 +157,8 @@
             messageElement.innerHTML = `<div class="message-header">
                         <span class="message-user">${message.sender}</span>
                         <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                    </div>
-                    <p class="message-content" id="${message.id}">${message.text}</p>`;
+                        </div>
+                        <p class="message-content" id="${message.id}">${message.text}</p>`;
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
             document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
@@ -196,6 +197,13 @@
             notificationCircle.style.display = 'block';
         });
 
+        socket.on('public-key', (friend, publicKey) => { // save the public key of the friend in the local storage
+            if (!localStorage.getItem(friend)) {
+                localStorage.setItem(friend, JSON.stringify({ publicKey }));
+            }
+            localStorage.setItem(friend.publicKey, publicKey);
+        });
+
         socket.on('refresh', () => { // refresh the chat list when a friend is removed or a request is accepted
             refresh();
         });
@@ -228,7 +236,12 @@
         async function sendMessage() {
             const message = messageInput.value;
             if (message) {
-                const { iv, ciphertext } = await encryptMessage(message);
+                const { iv, ciphertext } = await subtle.encrypt({
+                    name: 'RSA-OAEP',
+                }, await subtle.importKey('jwk', JSON.parse(localStorage.getItem(document.getElementById('currentChat')).publicKey), { // import the public key of the recipient
+                    name: 'RSA-OAEP',
+                    hash: 'SHA-256',
+                }, false, ['encrypt']), new TextEncoder().encode(message)); // encrypt the message
                 socket.emit('message', { // send message to server
                     text: { iv, ciphertext },
                     sender: document.cookie.split('=')[1],
@@ -255,6 +268,8 @@
 
                 let friends = await response.json();
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
+                    const localStorageFriend = localStorage.getItem(friend);
+                    if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
                     const li = document.createElement('li');
                     const notificationCircle = document.createElement('span');
                     notificationCircle.classList.add('message-notification-circle');
@@ -280,7 +295,6 @@
                         notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
                         messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                         messageInput.focus();
-                        // socket.emit('open-room', friend);
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();
