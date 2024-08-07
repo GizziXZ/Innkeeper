@@ -93,29 +93,10 @@
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
-        //FIXME - socket.emits are not working here, only on the gizzi account for some reason?
 
         //SECTION - encryption functions. honest opinion, encryption is fun until you're using the javascript crypto api and then you want to look for the nearest cliff
-        socket.on('connect', async () => {
-            console.log('connected');
-            if (!localStorage.getItem('userPrivateKey')) {
-            const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + request public keys from the database for every friend that you don't have their public key for)
-            name: 'RSA-OAEP',
-            modulusLength: 2048,
-            publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
-            hash: 'SHA-256',
-            }, true, ["encrypt","decrypt"]);
-            userPrivateKey = keyPair.privateKey;
-            userPublicKey = keyPair.publicKey;
-            localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
-            socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
-            } else {
-                userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey')), { // import the private key from the local storage
-                    name: 'RSA-OAEP',
-                    hash: 'SHA-256',
-                }, true, ['decrypt']);
-            }
-        });
+            // console.log(socket);
+
         // await subtle.encrypt({ // encrypt a message
         //     name: 'RSA-OAEP',
         // }, userPublicKey, new TextEncoder().encode('test')).then(encrypted => {
@@ -131,6 +112,22 @@
 
         messageInput.addEventListener('input', () => { // send typing event to server
             socket.emit('typing', document.getElementById('currentChat').textContent);
+        });
+
+        socket.on('public-key', (data) => { // save the public key of the friend in the local storage
+            // console.log(JSON.stringify(data.publicKey));
+            let friendObject = localStorage.getItem(data.friend);
+            if (!friendObject) {
+                friendObject = {};
+            } else {
+                friendObject = JSON.parse(friendObject);
+            }
+            if (!friendObject.publicKey) {
+                friendObject.publicKey = data.publicKey;
+            }
+            console.log(friendObject);
+            localStorage.setItem(data.friend, JSON.stringify(friendObject));
+            console.log(localStorage.getItem(data.friend));
         });
 
         socket.on('message', async (message) => { // receive message from server
@@ -172,7 +169,7 @@
             localStorage.setItem(currentChat, JSON.stringify(messages));
         });
 
-        socket.on('message-error', (message) => { // if the message fails to send (according to the server)
+        socket.on('message-error', (message) => { // if the message fails to send (according to the server) (subject to change)
             const currentChat = document.getElementById('currentChat').textContent;
             const messagehtml = document.getElementById(message.id)
             messagehtml.style.color = 'crimson';
@@ -249,6 +246,24 @@
 
         async function refresh() {
             try {
+                if (!localStorage.getItem('userPrivateKey')) {
+                    const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
+                        name: 'RSA-OAEP',
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+                        hash: 'SHA-256',
+                    }, true, ["encrypt","decrypt"]);
+                    userPrivateKey = keyPair.privateKey;
+                    userPublicKey = keyPair.publicKey;
+                    localStorage.setItem('userPrivateKey', JSON.stringify(await subtle.exportKey('jwk', userPrivateKey))); // save the private key in the local storage
+                    socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
+                } else {
+                    userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey')), { // import the private key from the local storage
+                        name: 'RSA-OAEP',
+                        hash: 'SHA-256',
+                    }, true, ['decrypt']);
+                }
+                
                 refreshPromise = new Promise(async (resolve) => {
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
@@ -266,15 +281,6 @@
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const localStorageFriend = localStorage.getItem(friend);
                     if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
-                    socket.on('public-key', (friend, publicKey) => { // save the public key of the friend in the local storage
-                        if (!localStorage.getItem(friend)) {
-                            localStorage.setItem(friend, JSON.stringify({ publicKey }));
-                        } else {
-                            const friendObject = JSON.parse(localStorage.getItem(friend));
-                            friendObject.publicKey = publicKey;
-                            localStorage.setItem(friend, JSON.stringify(friendObject));
-                        }
-                    });
                     
                     const li = document.createElement('li');
                     const notificationCircle = document.createElement('span');

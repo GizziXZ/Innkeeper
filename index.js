@@ -23,6 +23,20 @@ mongoose.connect(config.mongooseConnection + 'usersDB', {
     useUnifiedTopology: true,
 });
 
+async function handleUserConnection(socket) {
+    const user = await User.findOne({ username: socket.username });
+    user.online = true;
+    await user.save();
+    const friends = user.friends;
+    const onlineFriends = friends.filter(friend => userSockets[friend]);
+    onlineFriends.forEach(friend => {
+        const room = [socket.username, friend].sort().join('-');
+        socket.join(room); // join a room with the user and their friend
+        io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
+        io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
+    });
+}
+
 // SECTION - Socket.io
 io.on('connection', async (socket) => {
     try {
@@ -31,19 +45,7 @@ io.on('connection', async (socket) => {
         // console.log(socket.username + ' connected');
         userSockets[socket.username] = socket.id; // idk if i need this variable but it might be useful (at some point)
 
-        // on connection make the user online (this code is definitely awful, something tells me having one too many asyncs and awaits isnt good)
-        const user = await User.findOne({ username: socket.username });
-        user.online = true;
-        await user.save();
-        const friends = user.friends;
-        const onlineFriends = friends.filter(friend => userSockets[friend]);
-        onlineFriends.forEach(friend => {
-            const room = [socket.username, friend].sort().join('-');
-            socket.join(room); // join a room with the user and their friend
-            io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
-            io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
-        });
-
+        handleUserConnection(socket);
         socket.on('disconnect', () => {
             // console.log(socket.username + ' disconnected');
             delete userSockets[socket.username];
@@ -52,21 +54,22 @@ io.on('connection', async (socket) => {
                 const user = await User.findOne({ username: socket.username });
                 user.online = false;
                 await user.save();
+                const onlineFriends = friends.filter(friend => userSockets[friend]);
                 onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
             }, 1500);
         })
         socket.on('save-public-key', async (publicKey) => {
-            console.log(publicKey);
+            const user = await User.findOne({ username: socket.username });
             console.log(socket.username + ' has a public key');
             user.publicKey = publicKey;
             await user.save();
         })
         socket.on('request-public-key', async (username) => {
-            console.log('no public key found for ' + username);
             const friend = await User.findOne({ username });
-            if (!friend) return;
+            if (!friend.publicKey) return;
             if (friend.friends.includes(socket.username)) {
-                io.to(userSockets[socket.username]).emit('public-key', {friend: username, publicKey: user.publicKey});
+                // console.log(user.publicKey)
+                return io.to(userSockets[socket.username]).emit('public-key', {friend: username, publicKey: JSON.stringify(friend.publicKey)});
             }
         })
         socket.on('message', async (msg) => {
