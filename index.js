@@ -163,8 +163,9 @@ app.get('/register', (req, res) => {
 })
 
 app.get('/friend-requests', async (req, res) => {
-    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     try {
+        if (!req.cookies.token) return res.status(401).send();
+        const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
         const user = await User.findOne({ username }).populate('friendRequests');
         return res.status(200).send(user.friendRequests);
     } catch (err) {
@@ -174,8 +175,9 @@ app.get('/friend-requests', async (req, res) => {
 })
 
 app.get('/friends', async (req, res) => {
-    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     try {
+        if (!req.cookies.token) return res.status(401).send();
+        const username = jwt.verify(req.cookies.token, config.jwtSecret).username
         const user = await User.findOne({ username }).populate('friends');
         return res.status(200).send(user.friends);
     } catch (err) {
