@@ -60,7 +60,7 @@ io.on('connection', async (socket) => {
         })
         socket.on('save-public-key', async (publicKey) => {
             const user = await User.findOne({ username: socket.username });
-            console.log(socket.username + ' has a public key');
+            // console.log(socket.username + ' has a public key');
             user.publicKey = publicKey;
             await user.save();
         })
@@ -78,7 +78,7 @@ io.on('connection', async (socket) => {
             const recipient = msg.recipient;
             msg.sender = socket.username;
             if (recipient) {
-                msg.text = msg.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
+                // msg.text = msg.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
                 msg.id = uuid() // assign a unique id to the message
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;

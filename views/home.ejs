@@ -92,27 +92,43 @@
         const { subtle } = window.crypto;
         let db;
         let userPrivateKey, userPublicKey;
-        const request = indexedDB.open('innkeeper', 1); 
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
 
-        request.onupgradeneeded = (event) => { // create the database if it doesn't exist
-            db = event.target.result;
-            if (!db.objectStoreNames.contains('keys')) {
-                db.createObjectStore('keys', { keyPath: 'username' });
-            }
-            if (!db.objectStoreNames.contains('messages')) {
-                db.createObjectStore('messages', { keyPath: 'username' });
-            }
+        function openDatabase() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('innkeeper', 1);
+                
+                request.onupgradeneeded = (event) => { // create the database if it doesn't exist
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains('keys')) {
+                        db.createObjectStore('keys', { keyPath: 'username' });
+                    }
+                    if (!db.objectStoreNames.contains('messages')) {
+                        db.createObjectStore('messages', { keyPath: 'username' });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    resolve(db);
+                };
+
+                request.onerror = (event) => {
+                    console.error('IndexedDB error:', event.target.errorCode);
+                    reject(event.target.errorCode);
+                };
+            });
         }
 
-        request.onsuccess = (event) => {
-            db = event.target.result;
-        };
-
-        request.onerror = (event) => {
-            console.error('IndexedDB error:', event.target.errorCode);
-        };
+        async function init() {
+            try {
+                db = await openDatabase();
+                // console.log('Database loaded successfully');
+            } catch (error) {
+                console.error('Failed to load the database:', error);
+            }
+        }
 
         function savePrivateKey(username, privateKey) {
             const transaction = db.transaction(['keys'], 'readwrite');
@@ -133,21 +149,15 @@
             };
             store.put(keyData);
         }
-
-        function getPublicKeys() {
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(['keys'], 'readonly');
-                const store = transaction.objectStore('keys');
-                const request = store.getAll();
-
-                request.onsuccess = (event) => {
-                    resolve(event.target.result);
-                };
-
-                request.onerror = (event) => {
-                    reject(event.target.errorCode);
-                };
-            });
+        
+        function saveMessage(message) {
+            const transaction = db.transaction(['messages'], 'readonly');
+            const store = transaction.objectStore('messages');
+            const data = {
+                username: message.sender,
+                messages: [message]
+            };
+            store.add(message);
         }
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
@@ -171,19 +181,20 @@
             // publicKeys[data.friend] = data.publicKey;
             // localStorage.setItem('publicKeys', JSON.stringify(publicKeys));
             // console.log(localStorage.getItem('publicKeys'));
-            const publicKey = await subtle.importKey('jwk', JSON.parse(JSON.parse(data.publicKey)), { // WHY DO I HAVE TO PARSE THIS TWICE
-                name: 'RSA-OAEP',
-                hash: 'SHA-256',
-            }, true, ['encrypt'])
+            // const publicKey = await subtle.importKey('jwk', JSON.parse(JSON.parse(data.publicKey)), { // WHY DO I HAVE TO PARSE THIS TWICE
+            //     name: 'RSA-OAEP',
+            //     hash: 'SHA-256',
+            // }, true, ['encrypt'])
+            const publicKey = JSON.parse(JSON.parse(data.publicKey));
             savePublicKey(data.friend, publicKey);
         });
 
         socket.on('message', async (message) => { // receive message from server
-            // console.log(message);
+            console.log(message);
             const decryptedMessage = await subtle.decrypt({ // decrypt the message
                 name: 'RSA-OAEP',
             }, userPrivateKey, new Uint8Array(Object.values(message.text))).then(decrypted => {
-                return new TextDecoder().decode(decrypted);
+                new TextDecoder().decode(decrypted);
             });
             message.text = decryptedMessage;
             message.date = new Date();
@@ -193,13 +204,7 @@
                 // const messages = JSON.parse(localStorage.getItem(message.sender)) || [];
                 // messages.push(message);
                 // localStorage.setItem(message.sender, JSON.stringify(messages));
-                const transaction = db.transaction(['messages'], 'readonly');
-                const store = transaction.objectStore('messages');
-                const data = {
-                    username: message.sender,
-                    messages: [message]
-                };
-                store.add(message);
+                saveMessage(message);
                 
                 const chatlist = document.querySelector('.chat-list ul');
                 const friends = chatlist.getElementsByTagName('li');
@@ -219,10 +224,11 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
             document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
             // save the messages locally instead of on the server for privacy
-            const currentChat = document.getElementById('currentChat').textContent;
-            const messages = JSON.parse(localStorage.getItem(currentChat)) || [];
-            messages.push(message);
-            localStorage.setItem(currentChat, JSON.stringify(messages));
+            // const currentChat = document.getElementById('currentChat').textContent;
+            // const messages = JSON.parse(localStorage.getItem(currentChat)) || [];
+            // messages.push(message);
+            // localStorage.setItem(currentChat, JSON.stringify(messages));
+            saveMessage(message);
         });
 
         socket.on('message-error', (message) => { // if the message fails to send (according to the server) (subject to change)
@@ -230,10 +236,12 @@
             const messagehtml = document.getElementById(message.id)
             messagehtml.style.color = 'crimson';
             messagehtml.parentElement.getElementsByClassName('message-time')[0].textContent = '(Failed to send, try to open chat again)';
-            let messages = JSON.parse(localStorage.getItem(currentChat)) || [];
+            // let messages = JSON.parse(localStorage.getItem(currentChat)) || [];
+            let messages = db.transaction(['messages'], 'readwrite').objectStore('messages').get(currentChat);
             const savedMessage = messages.find(m => m.id === message.id);
             messages = messages.filter(m => m.id !== message.id); // remove the message from the local storage
-            localStorage.setItem(currentChat, JSON.stringify(messages));
+            // localStorage.setItem(currentChat, JSON.stringify(messages));
+            db.transaction(['messages'], 'readwrite').objectStore('messages').put(currentChat, messages);
         });
 
         socket.on('typing', (sender) => {
@@ -285,25 +293,33 @@
         async function sendMessage() {
             const message = messageInput.value;
             if (message) {
-                const { iv, ciphertext } = await subtle.encrypt({
-                    name: 'RSA-OAEP',
-                }, await subtle.importKey('jwk', JSON.parse(localStorage.getItem(document.getElementById('currentChat')).publicKey), { // import the public key of the recipient
-                    name: 'RSA-OAEP',
-                    hash: 'SHA-256',
-                }, false, ['encrypt']), new TextEncoder().encode(message)); // encrypt the message
-                socket.emit('message', { // send message to server
-                    text: { iv, ciphertext },
-                    sender: document.cookie.split('=')[1],
-                    recipient: document.getElementById('currentChat').textContent,
-                });
-                messageInput.value = ''; // clear the input field
+                db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
+                    if (!event.target.result) return; // if the public key doesn't exist, don't send the message
+                    event.target.result.publicKey.kty = 'RSA'
+                    const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
+                        name: 'RSA-OAEP',
+                        hash: 'SHA-256',
+                    }, true, ['encrypt']);
+                    
+                    const { iv, ciphertext } = await subtle.encrypt({ // FIXME - iv + ciphertext are not being sent to the server
+                        name: 'RSA-OAEP',
+                    }, publicKey, new TextEncoder().encode(message)); // encrypt the message
+                    socket.emit('message', { // send message to server
+                        text: { iv, ciphertext },
+                        sender: document.cookie.split('=')[1],
+                        recipient: document.getElementById('currentChat').textContent,
+                    });
+                    messageInput.value = ''; // clear the input field
+                }
             }
         }
 
         async function refresh() {
             try {
+                await init();
+                refreshPromise = new Promise(async (resolve) => {
                 const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
-                if (!localStorage.getItem('userPrivateKey')) {
+                if (!db.transaction(['keys'], 'readonly').objectStore('keys').get(username).privateKey) { // if the private key doesn't exist, generate it
                     const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
                         name: 'RSA-OAEP',
                         modulusLength: 2048,
@@ -323,14 +339,12 @@
                     savePrivateKey(username, userPrivateKey);
                     socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
                 } else {
-                    console.log(JSON.parse(localStorage.getItem('userPrivateKey'))[username]);
-                    userPrivateKey = await subtle.importKey('jwk', JSON.parse(localStorage.getItem('userPrivateKey'))[username], { // import the private key from the local storage
+                    // console.log(JSON.parse(localStorage.getItem('userPrivateKey'))[username]);
+                    userPrivateKey = await subtle.importKey('jwk', db.transaction(['keys'], 'readonly').objectStore('keys').get(username).publicKey, { // import the private key from the local storage
                         name: 'RSA-OAEP',
                         hash: 'SHA-256',
                     }, true, ['decrypt']);
                 }
-                
-                refreshPromise = new Promise(async (resolve) => {
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
                 // chatlist.innerHTML = ''; // Clear existing list items
@@ -361,26 +375,33 @@
                     notificationCircle.classList.add('message-notification-circle');
                     notificationCircle.style.visibility = 'hidden';
                     li.textContent = friend;
-                    li.addEventListener('click', () => { // switch the chat to the selected friend
+                    li.addEventListener('click', async () => { // switch the chat to the selected friend
                         messageInput.removeAttribute('disabled'); // enable the message input field
                         document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
                         currentChat.textContent = friend;
                         messagesContainer.innerHTML = ''; // Clear existing messages
-                        const messages = JSON.parse(localStorage.getItem(friend)) || []; // load the messages from the local storage
-                        messages.forEach(message => {
-                            if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
-                            const messageElement = document.createElement('div');
-                            messageElement.classList.add('message');
-                            messageElement.innerHTML = `<div class="message-header">
-                                <span class="message-user">${message.sender}</span>
-                                <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                                </div>
-                                <p class="message-content">${message.text}</p>`;
-                            messagesContainer.appendChild(messageElement);
-                        });
-                        notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                        messageInput.focus();
+                        // const messages = JSON.parse(localStorage.getItem(friend)) || []; // load the messages from the local storage
+                        const messagesTransaction = db.transaction(['messages'], 'readonly');
+                        const messagesStore = messagesTransaction.objectStore('messages');
+                        const messagesRequest = messagesStore.get(friend);
+
+                        messagesRequest.onsuccess = (event) => { // after the messages are grabbed from storage, display them
+                            const messages = event.target.result || [];
+                            messages.forEach(message => {
+                                if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
+                                const messageElement = document.createElement('div');
+                                messageElement.classList.add('message');
+                                messageElement.innerHTML = `<div class="message-header">
+                                    <span class="message-user">${message.sender}</span>
+                                    <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                                    </div>
+                                    <p class="message-content">${message.text}</p>`;
+                                messagesContainer.appendChild(messageElement);
+                            });
+                            notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                            messageInput.focus();
+                        };
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();
