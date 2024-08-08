@@ -101,6 +101,9 @@
             if (!db.objectStoreNames.contains('keys')) {
                 db.createObjectStore('keys', { keyPath: 'username' });
             }
+            if (!db.objectStoreNames.contains('messages')) {
+                db.createObjectStore('messages', { keyPath: 'username' });
+            }
         }
 
         request.onsuccess = (event) => {
@@ -111,15 +114,40 @@
             console.error('IndexedDB error:', event.target.errorCode);
         };
 
-        async function savePrivateKey(username, privateKey) {
+        function savePrivateKey(username, privateKey) {
             const transaction = db.transaction(['keys'], 'readwrite');
             const store = transaction.objectStore('keys');
-            const keys = {
-                username: username,
-                privateKey: await subtle.exportKey('jwk', privateKey),
+            const key = {
+                username,
+                privateKey
             };
-            console.log(store)
-            store.put(keys);
+            store.add(key);
+        }
+
+        function savePublicKey(friend, publicKey) {
+            const transaction = db.transaction(['keys'], 'readwrite');
+            const store = transaction.objectStore('keys');
+            const keyData = {
+                username: friend,
+                publicKey
+            };
+            store.put(keyData);
+        }
+
+        function getPublicKeys() {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['keys'], 'readonly');
+                const store = transaction.objectStore('keys');
+                const request = store.getAll();
+
+                request.onsuccess = (event) => {
+                    resolve(event.target.result);
+                };
+
+                request.onerror = (event) => {
+                    reject(event.target.errorCode);
+                };
+            });
         }
 
         messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
@@ -132,17 +160,22 @@
             socket.emit('typing', document.getElementById('currentChat').textContent);
         });
 
-        socket.on('public-key', (data) => { // save the public key of the friend in the local storage
+        socket.on('public-key', async (data) => { // save the public key of the friend in the local storage
             // console.log(JSON.stringify(data.publicKey));
-            let publicKeys = localStorage.getItem('publicKeys');
-            if (publicKeys) {
-                publicKeys = JSON.parse(publicKeys);
-            } else {
-                publicKeys = {};
-            }
-            publicKeys[data.friend] = data.publicKey;
-            localStorage.setItem('publicKeys', JSON.stringify(publicKeys));
-            console.log(localStorage.getItem('publicKeys'));
+            // let publicKeys = localStorage.getItem('publicKeys');
+            // if (publicKeys) {
+            //     publicKeys = JSON.parse(publicKeys);
+            // } else {
+            //     publicKeys = {};
+            // }
+            // publicKeys[data.friend] = data.publicKey;
+            // localStorage.setItem('publicKeys', JSON.stringify(publicKeys));
+            // console.log(localStorage.getItem('publicKeys'));
+            const publicKey = await subtle.importKey('jwk', JSON.parse(JSON.parse(data.publicKey)), { // WHY DO I HAVE TO PARSE THIS TWICE
+                name: 'RSA-OAEP',
+                hash: 'SHA-256',
+            }, true, ['encrypt'])
+            savePublicKey(data.friend, publicKey);
         });
 
         socket.on('message', async (message) => { // receive message from server
@@ -157,9 +190,17 @@
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
-                const messages = JSON.parse(localStorage.getItem(message.sender)) || [];
-                messages.push(message);
-                localStorage.setItem(message.sender, JSON.stringify(messages));
+                // const messages = JSON.parse(localStorage.getItem(message.sender)) || [];
+                // messages.push(message);
+                // localStorage.setItem(message.sender, JSON.stringify(messages));
+                const transaction = db.transaction(['messages'], 'readonly');
+                const store = transaction.objectStore('messages');
+                const data = {
+                    username: message.sender,
+                    messages: [message]
+                };
+                store.add(message);
+                
                 const chatlist = document.querySelector('.chat-list ul');
                 const friends = chatlist.getElementsByTagName('li');
                 for (let i = 0; i < friends.length; i++) {
@@ -304,9 +345,17 @@
 
                 let friends = await response.json();
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
-                    const localStorageFriend = localStorage.getItem(friend);
-                    if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
-                    
+                    // const localStorageFriend = localStorage.getItem(friend);
+                    // if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
+                    const transaction = db.transaction(['keys'], 'readonly');
+                    const store = transaction.objectStore('keys');
+                    const request = store.get(friend);
+                    request.onsuccess = async (event) => {
+                        if (!event.target.result) {
+                            socket.emit('request-public-key', friend);
+                        }
+                    };
+
                     const li = document.createElement('li');
                     const notificationCircle = document.createElement('span');
                     notificationCircle.classList.add('message-notification-circle');
