@@ -137,7 +137,7 @@
                 username,
                 privateKey
             };
-            store.add(key);
+            store.put(key);
         }
 
         function savePublicKey(friend, publicKey) {
@@ -195,30 +195,25 @@
             savePublicKey(data.friend, publicKey);
         });
 
+        // FIXME - messages aren't saved to the proper key
         socket.on('message', async (message) => { // receive message from server
             if (message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't decrypt it if it's for the other user
-            console.log(message);
-            const decodedMessage = atob(message.text);
-            // console.log(decodedMessage);
-            const encrypted = new Uint8Array(decodedMessage.split('').map(c => c.charCodeAt(0)));
-            console.log(encrypted);
-            userPrivateKey = await subtle.importKey('jwk', userPrivateKey, {
+            message.text = new Uint8Array(atob(message.text).split('').map(c => c.charCodeAt(0))); // decode the message
+            // userPrivateKey = await subtle.importKey('jwk', userPrivateKey, {
+            //     name: 'RSA-OAEP',
+            //     hash: 'SHA-256',
+            // }, true, ['decrypt'])
+            let decryptedMessage;
+            await subtle.decrypt({ // decrypt the message
                 name: 'RSA-OAEP',
-                hash: 'SHA-256',
-            }, true, ['decrypt'])
-            console.log(userPrivateKey) // undefined?
-            const decryptedMessage = await subtle.decrypt({ // decrypt the message
-                name: 'RSA-OAEP',
-            }, userPrivateKey, new Uint8Array(encrypted)).then(decrypted => {
-                console.log('decrypt')
-                new TextDecoder().decode(decrypted);
+            }, userPrivateKey, message.text).then(decrypted => {
+                decryptedMessage = new TextDecoder().decode(decrypted);
             });
-            console.log(decryptedMessage);
             message.text = decryptedMessage;
             message.date = new Date();
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
-            if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) message.chat = message.recipient; // set the chat to the recipient if the message is from the other user (these circles i'm making are getting out of hand)
+            if (message.recipient === document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) message.chat = message.sender;
             if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
                 // const messages = JSON.parse(localStorage.getItem(message.sender)) || [];
                 // messages.push(message);
@@ -317,15 +312,15 @@
             if (message) {
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the public key doesn't exist, don't send the message
-                    event.target.result.publicKey.kty = 'RSA'
                     const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
                         name: 'RSA-OAEP',
                         hash: 'SHA-256',
                     }, true, ['encrypt']);
+                    const encodedMessage = new TextEncoder().encode(message); // encode the message (because apparently that's how you do it in subtlecrypto)
                     const encrypted = await subtle.encrypt({
                         name: 'RSA-OAEP',
-                    }, publicKey, new TextEncoder().encode(message)); // encrypt the message
-                    console.log(new Uint8Array(encrypted));
+                    }, publicKey, encodedMessage); // encrypt the message
+                    // console.log(new Uint8Array(encrypted));
                     socket.emit('message', { // send message to server
                         text: btoa(String.fromCharCode.apply(null, new Uint8Array(encrypted))),
                         sender: document.cookie.split('=')[1],
@@ -379,14 +374,17 @@
                     // }
                     // savedPrivateKeys[username] = JSON.stringify(await subtle.exportKey('jwk', userPrivateKey)); // save the private key in the local storage
                     // localStorage.setItem('userPrivateKey', JSON.stringify(savedPrivateKeys)); // save the private key in the local storage
-                    savePrivateKey(username, userPrivateKey);
+                    savePrivateKey(username, await subtle.exportKey('jwk', userPrivateKey));
                     console.log('Private key saved');
                     socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
-                } else {
+                } else { // if the user is in the store, load the key
                     // console.log(JSON.parse(localStorage.getItem('userPrivateKey'))[username]);
                     db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
                         if (!event.target.result) return;
-                        userPrivateKey = await subtle.exportKey('jwk', event.target.result.privateKey);
+                        userPrivateKey = await subtle.importKey('jwk', event.target.result.privateKey, {
+                            name: 'RSA-OAEP',
+                            hash: 'SHA-256',
+                        }, true, ['decrypt']);
                         console.log('Private key loaded');
                     }
                 }
@@ -445,10 +443,10 @@
                                     <p class="message-content">${message.text}</p>`;
                                 messagesContainer.appendChild(messageElement);
                             });
-                            notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
-                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                            messageInput.focus();
                         };
+                        notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                        messageInput.focus();
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();

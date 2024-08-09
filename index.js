@@ -60,7 +60,7 @@ io.on('connection', async (socket) => {
         })
         socket.on('save-public-key', async (publicKey) => {
             const user = await User.findOne({ username: socket.username });
-            // console.log(socket.username + ' has a public key');
+            // console.log(`new public key saved for ${socket.username}`);
             user.publicKey = publicKey;
             await user.save();
         })
