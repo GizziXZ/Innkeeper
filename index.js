@@ -15,7 +15,7 @@ const io = new Server(server);
 const userSockets = {};
 
 // TODO - image uploading
-// TODO - key generation system, check if there's already a saved key, if not then generate a new one for both users
+// TODO - better error handling would probably be good on the list
 // TODO - i should probably not have everything in one file but i'm too lazy to make more files rn
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
@@ -90,14 +90,25 @@ io.on('connection', async (socket) => {
                 }
             }
         })
-        let typingUsers = new Set();
+        // funny little variables for ratelimiting so that the server doesn't get spammed with typing events
+        let typingEventCounts = new Map();
+        const maxEvents = 5;
+        const timeWindow = 300;
         socket.on('typing', async (recipient) => {
-            const sender = socket.username;
-            // deny any other typing events from the sender temporarily for performance reasons
-            if (typingUsers.has(sender)) return;
-            typingUsers.add(sender);
-            setTimeout(() => typingUsers.delete(sender), 3000);
             if (recipient) {
+                const sender = socket.username;
+                // initialize or increment the event count for the sender
+                if (!typingEventCounts.has(sender)) { 
+                    typingEventCounts.set(sender, 1);
+                    setTimeout(() => typingEventCounts.delete(sender), timeWindow);
+                } else {
+                    typingEventCounts.set(sender, typingEventCounts.get(sender) + 1);
+                }
+
+                // Check if the sender has exceeded the rate limit
+                if (typingEventCounts.get(sender) > maxEvents) return;
+
+                // Check if the recipient is a friend of the sender then emit
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(sender)) return;
                 const room = [socket.username, recipient].sort().join('-');
