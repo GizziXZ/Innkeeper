@@ -224,8 +224,24 @@ footer {
     border-top: 1px solid #202225;
 }
 
+#upload {
+    position: fixed;
+    bottom: 6px;
+    right: 4px;
+    width: 2%;
+    height: 3.5%;
+    border-radius: 5px;
+    border: none;
+    background-color: #8a8a8a;
+}
+
+#upload:hover {
+    background-color: #707070;
+    cursor: pointer;
+}
+
 footer input {
-    width: 99%;
+    width: 96.5%;
     padding: 8px;
     border: none;
     border-radius: 5px;

@@ -57,6 +57,8 @@
             <p id="typingIndicator"></p>
             <footer>
                 <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off" disabled>
+                <input id="fileInput" type="file" accept="image/*" style="display: none;" onchange="uploadImage(event)">
+                <button id="upload" onclick="document.getElementById('fileInput').click()" disabled>+</button>
             </footer>
         </main>
     </div>
@@ -152,11 +154,32 @@
 
         function getMessageHTML(message) { // get the default HTML for a message
             if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
+            if (!message.date) message.date = new Date();
             return `<div class="message-header">
                     <span class="message-user">${message.sender}</span>
-                    <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                    <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
                     </div>
                     <p class="message-content" id="${message.id}">${message.text}</p>`;
+        }
+
+        function uploadImage(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const image = event.target.result;
+                const recipient = document.getElementById('currentChat').textContent;
+
+                // display the image
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                // NOTE - This is temporary code, i will need to: encrypt the image, send it to the server, decrypt + save it on indexedDB, display it
+                const img = document.createElement('img');
+                img.src = image;
+                document.querySelector('.messages').appendChild(messageElement).appendChild(img);
+
+                socket.emit('uploadImage', { image, recipient });
+            };
+            reader.readAsDataURL(file);
         }
 
         function messageError(message) {
@@ -390,6 +413,7 @@
                     li.textContent = friend;
                     li.addEventListener('click', async () => { // switch the chat to the selected friend
                         messageInput.removeAttribute('disabled'); // enable the message input field
+                        document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
                         document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
                         currentChat.textContent = friend;
                         messagesContainer.innerHTML = ''; // Clear existing messages
