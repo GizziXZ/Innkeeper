@@ -306,7 +306,7 @@
                             response.message.text = messageText;
                         }
                         if (response.error) { // if the message fails to send (according to the server)
-                            // console.error(response.error);
+                            console.error(response.error);
                             const message = response.message;
                             const messageElement = document.createElement('div');
                             messageElement.classList.add('message');
@@ -326,20 +326,6 @@
                             saveMessage(message, message.recipient); // saving the message, the recipient would be the other user and the sender would be the current user
                         }
                     });
-                    // socket.once('message-error', (message) => { // if the message fails to send (according to the server) (subject to change)
-                    //     console.log(message);
-                    //     const currentChat = document.getElementById('currentChat').textContent;
-                    //     const messagehtml = document.getElementById(message.id)
-                    //     messagehtml.style.color = 'crimson';
-                    //     messagehtml.parentElement.getElementsByClassName('message-time')[0].textContent = '(Failed to send, try to open chat again)';
-                    //     db.transaction(['messages'], 'readwrite').objectStore('messages').get(currentChat).onsuccess = (event) => {
-                    //         if (!event.target.result) return;
-                    //         let messages = event.target.result.messages;
-                    //         const savedMessage = messages.find(m => m.id === message.id);
-                    //         messages = messages.filter(m => m.id !== message.id); // remove the message from the array of saved messages
-                    //         db.transaction(['messages'], 'readwrite').objectStore('messages').put(currentChat, messages); // save the messages back to the store without the failed message
-                    //     };
-                    // });
                 }
             }
         }
@@ -360,14 +346,6 @@
                         }, true, ["encrypt","decrypt"]);
                         userPrivateKey = keyPair.privateKey;
                         userPublicKey = keyPair.publicKey;
-                        // let savedPrivateKeys = localStorage.getItem('userPrivateKey');
-                        // if (savedPrivateKeys) {
-                        //     savedPrivateKeys = JSON.parse(savedPrivateKeys);
-                        // } else {
-                        //     savedPrivateKeys = {};
-                        // }
-                        // savedPrivateKeys[username] = JSON.stringify(await subtle.exportKey('jwk', userPrivateKey)); // save the private key in the local storage
-                        // localStorage.setItem('userPrivateKey', JSON.stringify(savedPrivateKeys)); // save the private key in the local storage
                         savePrivateKey(username, await subtle.exportKey('jwk', userPrivateKey));
                         console.log('Private key saved');
                         socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
@@ -396,8 +374,6 @@
 
                 let friends = await response.json();
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
-                    // const localStorageFriend = localStorage.getItem(friend);
-                    // if (!localStorageFriend || !JSON.parse(localStorageFriend).publicKey) socket.emit('request-public-key', friend); // check for a saved public key for the friend and request it if it doesn't exist
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
                     const request = store.get(friend);
@@ -417,7 +393,6 @@
                         document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
                         currentChat.textContent = friend;
                         messagesContainer.innerHTML = ''; // Clear existing messages
-                        // const messages = JSON.parse(localStorage.getItem(friend)) || []; // load the messages from the local storage
                         const messagesTransaction = db.transaction(['messages'], 'readonly');
                         const messagesStore = messagesTransaction.objectStore('messages');
                         const messagesRequest = messagesStore.get(friend);
