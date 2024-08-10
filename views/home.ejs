@@ -164,7 +164,7 @@
                     <img src="${message.img}">`;
         }
 
-        async function encryptLarge(data, publicKey) {
+        async function encryptLarge(data, publicKey) { // using hybrid encryption to encrypt large data
             const symmetricKey =  (await subtle.generateKey({ // generate a symmetric key
                 name: 'AES-GCM',
                 length: 256,
@@ -178,7 +178,7 @@
             }, symmetricKey, encoded);
             const encryptedSymmetricKey = await subtle.encrypt({ // encrypt the symmetric key
                 name: 'RSA-OAEP',
-            }, publicKey, new Uint8Array(await subtle.exportKey('jwk', symmetricKey)));
+            }, publicKey, new TextEncoder().encode(await subtle.exportKey('jwk', symmetricKey)));
             return {
                 encrypted, // symmetric key encrypted data
                 encryptedSymmetricKey, // symmetric key encrypted with the RSA public key
@@ -212,14 +212,14 @@
                         // display the image
                         const messageElement = document.createElement('div');
                         messageElement.classList.add('message');
-                        const message = response.message
-                        message.img = image;
-                        messageElement.innerHTML = getMessageHTML(message);
+                        response.img = image;
+                        messageElement.innerHTML = getMessageHTML(response);
                         messagesContainer.appendChild(messageElement);
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
                     })
                 }
             };
-            reader.readAsDataURL(file);
+            return reader.readAsDataURL(file);
         }
 
         function messageError(message) {
@@ -275,9 +275,12 @@
                 //     messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                 //     return; // return to prevent the rest of the function from running (since i haven't added sending text and an image at the same time yet)
                 // });
+                console.log(message.key);
                 let symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
                     name: 'RSA-OAEP',
-                }, userPrivateKey, new Uint8Array(message.key.split('').map(c => c.charCodeAt(0)))).then(async decrypted => {
+                }, userPrivateKey, new Uint8Array(message.key)).then(async decrypted => {
+                    // decrypted = new TextDecoder().decode(decrypted);
+                    console.log(decrypted); // FIXME - keeps returning an empty array
                     symmetricKey = await subtle.importKey('jwk', decrypted, {
                         name: 'AES-GCM',
                         length: 256,
