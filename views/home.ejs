@@ -155,29 +155,69 @@
         function getMessageHTML(message) { // get the default HTML for a message
             if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
             if (!message.date) message.date = new Date();
+            if (!message.img) message.img = '';
             return `<div class="message-header">
                     <span class="message-user">${message.sender}</span>
                     <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
                     </div>
-                    <p class="message-content" id="${message.id}">${message.text}</p>`;
+                    <p class="message-content" id="${message.id}">${message.text}</p>
+                    <img src="${message.img}">`;
+        }
+
+        async function encryptLarge(data, publicKey) {
+            const symmetricKey =  (await subtle.generateKey({ // generate a symmetric key
+                name: 'AES-GCM',
+                length: 256,
+            }, true, ['encrypt', 'decrypt']));
+
+            const encoded = new TextEncoder().encode(data); // encode the data
+            const iv = window.crypto.getRandomValues(new Uint8Array(12)); // generate an initialization vector
+            const encrypted = await subtle.encrypt({ // encrypt the data
+                name: 'AES-GCM',
+                iv,
+            }, symmetricKey, encoded);
+            const encryptedSymmetricKey = await subtle.encrypt({ // encrypt the symmetric key
+                name: 'RSA-OAEP',
+            }, publicKey, new Uint8Array(await subtle.exportKey('jwk', symmetricKey)));
+            return {
+                encrypted, // symmetric key encrypted data
+                encryptedSymmetricKey, // symmetric key encrypted with the RSA public key
+                iv, // ...the iv lol
+            };
         }
 
         function uploadImage(event) {
-            const file = event.target.files[0];
+        // NOTE - This is temporary code, i will need to: encrypt the image, send it to the server, decrypt + save it on indexedDB, display it (and make sure it's displayed on the current user with the usual message metadata)
+        const file = event.target.files[0];
             const reader = new FileReader();
             reader.onload = (event) => {
                 const image = event.target.result;
                 const recipient = document.getElementById('currentChat').textContent;
-
-                // display the image
-                const messageElement = document.createElement('div');
-                messageElement.classList.add('message');
-                // NOTE - This is temporary code, i will need to: encrypt the image, send it to the server, decrypt + save it on indexedDB, display it
-                const img = document.createElement('img');
-                img.src = image;
-                document.querySelector('.messages').appendChild(messageElement).appendChild(img);
-
-                socket.emit('uploadImage', { image, recipient });
+                db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
+                    if (!event.target.result) return; // if the public key doesn't exist, don't send
+                    const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
+                        name: 'RSA-OAEP',
+                        hash: 'SHA-256',
+                    }, true, ['encrypt']);
+                    // FIXME - image is too big to encrypt (large messages seem to also be a problem)
+                    const { encrypted, encryptedSymmetricKey, iv } = await encryptLarge(image, publicKey);
+                    const data = {
+                        img: encrypted,
+                        key: encryptedSymmetricKey,
+                        iv,
+                        recipient,
+                    };
+                    socket.emit('message', data, (response) => {
+                        if (response.error) return console.error('Failed to send image:', response.error);
+                        // display the image
+                        const messageElement = document.createElement('div');
+                        messageElement.classList.add('message');
+                        const message = response.message
+                        message.img = image;
+                        messageElement.innerHTML = getMessageHTML(message);
+                        messagesContainer.appendChild(messageElement);
+                    })
+                }
             };
             reader.readAsDataURL(file);
         }
@@ -222,7 +262,37 @@
 
         socket.on('message', async (message) => { // receive message from server
             if (message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't do anything if it's not for the current user
-            message.text = new Uint8Array(atob(message.text).split('').map(c => c.charCodeAt(0))); // decode the message
+            if (message.img) {
+                // await subtle.decrypt({ // decrypt the image
+                //     name: 'RSA-OAEP',
+                // }, userPrivateKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
+                //     message.img = new TextDecoder().decode(decrypted);
+                //     console.log(decrypted);
+                //     const messageElement = document.createElement('div');
+                //     messageElement.classList.add('message');
+                //     messageElement.innerHTML = getMessageHTML(message);
+                //     messagesContainer.appendChild(messageElement);
+                //     messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                //     return; // return to prevent the rest of the function from running (since i haven't added sending text and an image at the same time yet)
+                // });
+                let symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
+                    name: 'RSA-OAEP',
+                }, userPrivateKey, new Uint8Array(message.key.split('').map(c => c.charCodeAt(0)))).then(async decrypted => {
+                    symmetricKey = await subtle.importKey('jwk', decrypted, {
+                        name: 'AES-GCM',
+                        length: 256,
+                    }, true, ['encrypt', 'decrypt']);
+                });
+                const decryptedImage = await subtle.decrypt({ // decrypt the image
+                    name: 'AES-GCM',
+                    iv: new Uint8Array(message.iv.split('').map(c => c.charCodeAt(0))),
+                }, symmetricKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
+                    decrypted = new TextDecoder().decode(decrypted);
+                    console.log(decrypted)
+                    return decrypted;
+                });
+            }
+            message.text = new Uint8Array(message.text.split('').map(c => c.charCodeAt(0))); // decode the message
             let decryptedMessage;
             await subtle.decrypt({ // decrypt the message
                 name: 'RSA-OAEP',
@@ -319,7 +389,7 @@
                         name: 'RSA-OAEP',
                     }, publicKey, encodedMessage);
                     const data = {
-                        text: btoa(String.fromCharCode.apply(null, new Uint8Array(encrypted))), // ngl i don't know what the fromCharCode.apply thing does but it works so i'm not gonna touch it
+                        text: String.fromCharCode.apply(null, new Uint8Array(encrypted)), // ngl i don't know what the fromCharCode.apply thing does but it works so i'm not gonna touch it
                         recipient: document.getElementById('currentChat').textContent,
                     }
                     socket.emit('message', data, (response) => { // send message to server
