@@ -72,22 +72,24 @@ io.on('connection', async (socket) => {
                 return io.to(userSockets[socket.username]).emit('public-key', {friend: username, publicKey: JSON.stringify(friend.publicKey)});
             }
         })
-        socket.on('message', async (msg) => {
-            // console.log(msg);
-            if (!msg.recipient || !msg.text) return;
-            const recipient = msg.recipient;
-            msg.sender = socket.username;
+        socket.on('message', async (message, callback) => {
+            // console.log(message);
+            if (!message.recipient || !message.text) return;
+            const recipient = message.recipient;
             if (recipient) {
-                // msg.text = msg.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
-                msg.id = uuid() // assign a unique id to the message
+                // message.text = message.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
+                message.sender = socket.username;
+                message.id = uuid() // assign a unique id to the message
                 const friend = await User.findOne({ username: recipient });
                 if (!friend.friends.includes(socket.username)) return;
                 const room = [socket.username, recipient].sort().join('-');
-                // console.log(msg.id);
-                io.to(room).emit('message', msg);
+                // console.log(message.id);
+                io.to(room).emit('message', message);
                 if ((await io.in(room).fetchSockets()).length < 2) { // if there is only one person in the room
-                    io.to(userSockets[socket.username]).emit('message-error', msg);
+                    // io.to(userSockets[socket.username]).emit('message-error', message);
+                    return callback({error: 'The recipient is offline', message});
                 }
+                callback(message); // send the message back to the client so that it can be displayed in the chat
             }
         })
         // funny little variables for ratelimiting so that the server doesn't get spammed with typing events

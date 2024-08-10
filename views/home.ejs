@@ -149,6 +149,22 @@
             };
             store.put(keyData);
         }
+
+        function getMessageHTML(message) { // get the default HTML for a message
+            if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
+            return `<div class="message-header">
+                    <span class="message-user">${message.sender}</span>
+                    <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                    </div>
+                    <p class="message-content" id="${message.id}">${message.text}</p>`;
+        }
+
+        function messageError(message) {
+            const currentChat = document.getElementById('currentChat').textContent;
+            const messagehtml = document.getElementById(message.id)
+            messagehtml.style.color = 'crimson';
+            messagehtml.parentElement.getElementsByClassName('message-time')[0].textContent = '(Failed to send, try to open chat again)';
+        }
         
         function saveMessage(message, username) { // save the message in the indexedDB (essentially local storage)
             const transaction = db.transaction(['messages'], 'readwrite');
@@ -177,20 +193,6 @@
         });
 
         socket.on('public-key', async (data) => { // save the public key of the friend in the local storage
-            // console.log(JSON.stringify(data.publicKey));
-            // let publicKeys = localStorage.getItem('publicKeys');
-            // if (publicKeys) {
-            //     publicKeys = JSON.parse(publicKeys);
-            // } else {
-            //     publicKeys = {};
-            // }
-            // publicKeys[data.friend] = data.publicKey;
-            // localStorage.setItem('publicKeys', JSON.stringify(publicKeys));
-            // console.log(localStorage.getItem('publicKeys'));
-            // const publicKey = await subtle.importKey('jwk', JSON.parse(JSON.parse(data.publicKey)), {
-            //     name: 'RSA-OAEP',
-            //     hash: 'SHA-256',
-            // }, true, ['encrypt'])
             const publicKey = JSON.parse(JSON.parse(data.publicKey)); // insert mandatory "WHY DO I HAVE TO PARSE THIS TWICE" comment here
             savePublicKey(data.friend, publicKey);
         });
@@ -198,10 +200,6 @@
         socket.on('message', async (message) => { // receive message from server
             if (message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't do anything if it's not for the current user
             message.text = new Uint8Array(atob(message.text).split('').map(c => c.charCodeAt(0))); // decode the message
-            // userPrivateKey = await subtle.importKey('jwk', userPrivateKey, {
-            //     name: 'RSA-OAEP',
-            //     hash: 'SHA-256',
-            // }, true, ['decrypt'])
             let decryptedMessage;
             await subtle.decrypt({ // decrypt the message
                 name: 'RSA-OAEP',
@@ -209,13 +207,11 @@
                 decryptedMessage = new TextDecoder().decode(decrypted);
             });
             message.text = decryptedMessage;
+            decryptedMessage = decryptedMessage.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
             message.date = new Date();
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
-                // const messages = JSON.parse(localStorage.getItem(message.sender)) || [];
-                // messages.push(message);
-                // localStorage.setItem(message.sender, JSON.stringify(messages));
                 saveMessage(message, message.sender); // in this case, the sender is the other user and the recipient is the current user
                 const chatlist = document.querySelector('.chat-list ul');
                 const friends = chatlist.getElementsByTagName('li');
@@ -226,40 +222,14 @@
                 }
                 return;
             }
-            messageElement.innerHTML = `<div class="message-header">
-                        <span class="message-user">${message.sender}</span>
-                        <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                        </div>
-                        <p class="message-content" id="${message.id}">${message.text}</p>`;
+            messageElement.innerHTML = getMessageHTML(message);
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
             document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
-            // save the messages locally instead of on the server for privacy
-            // const currentChat = document.getElementById('currentChat').textContent;
-            // const messages = JSON.parse(localStorage.getItem(currentChat)) || [];
-            // messages.push(message);
-            // localStorage.setItem(currentChat, JSON.stringify(messages));
             saveMessage(message, message.sender); // since we already have an if statement to not do anything if the message isn't for the current user, we can just save the message with the sender as the chat
         });
 
-        // socket.on('message-error', (message) => { // if the message fails to send (according to the server) (subject to change)
-        //     const currentChat = document.getElementById('currentChat').textContent;
-        //     const messagehtml = document.getElementById(message.id)
-        //     messagehtml.style.color = 'crimson';
-        //     messagehtml.parentElement.getElementsByClassName('message-time')[0].textContent = '(Failed to send, try to open chat again)';
-        //     // let messages = JSON.parse(localStorage.getItem(currentChat)) || [];
-        //     db.transaction(['messages'], 'readwrite').objectStore('messages').get(currentChat).onsuccess = (event) => {
-        //         if (!event.target.result) return;
-        //         let messages = event.target.result.messages;
-        //         const savedMessage = messages.find(m => m.id === message.id);
-        //         messages = messages.filter(m => m.id !== message.id); // remove the message from the local storage
-        //         // localStorage.setItem(currentChat, JSON.stringify(messages));
-        //         db.transaction(['messages'], 'readwrite').objectStore('messages').put(currentChat, messages);
-        //     };
-        // });
-
         let typingTimeout;
-
         socket.on('typing', (sender) => {
             if (sender !== document.getElementById('currentChat').textContent) return; // only show typing indicator if the sender is the current chat
             const typingIndicator = document.getElementById('typingIndicator');
@@ -312,39 +282,64 @@
         })
 
         async function sendMessage() {
-            const message = messageInput.value;
-            if (message) {
+            let messageText = messageInput.value;
+            messageText = messageText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
+            if (messageText) {
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the public key doesn't exist, don't send the message
                     const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
                         name: 'RSA-OAEP',
                         hash: 'SHA-256',
                     }, true, ['encrypt']);
-                    const encodedMessage = new TextEncoder().encode(message); // encode the message (because apparently that's how you do it in subtlecrypto)
+                    const encodedMessage = new TextEncoder().encode(messageText); // encode the message (because apparently that's how you do it in subtlecrypto)
                     const encrypted = await subtle.encrypt({  // encrypt the message
                         name: 'RSA-OAEP',
                     }, publicKey, encodedMessage);
-                    socket.emit('message', { // send message to server
-                        text: btoa(String.fromCharCode.apply(null, new Uint8Array(encrypted))), // ngl i don't know what the fromCharCode.apply thing does but it works so i'm not gonna touch it
-                        sender: document.cookie.split('=')[1],
-                        recipient: document.getElementById('currentChat').textContent,
-                    });
-                    const messageElement = document.createElement('div');
-                    messageElement.classList.add('message');
-                    messageElement.innerHTML = `<div class="message-header">
-                        <span class="message-user">${document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent}</span>
-                        <span class="message-time">${new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                        </div>
-                        <p class="message-content">${message}</p>`;
-                    messagesContainer.appendChild(messageElement);
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                    messageInput.value = ''; // clear the input field
                     const data = {
-                        text: message,
-                        sender: document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent,
+                        text: btoa(String.fromCharCode.apply(null, new Uint8Array(encrypted))), // ngl i don't know what the fromCharCode.apply thing does but it works so i'm not gonna touch it
                         recipient: document.getElementById('currentChat').textContent,
                     }
-                    saveMessage(data, data.recipient); // saving the message, the recipient would be the other user and the sender would be the current user
+                    socket.emit('message', data, (response) => { // send message to server
+                        if (response.text) { // change response texts back to messageText because the server sends the message back with the base64 encoded + encrypted message
+                            response.text = messageText;
+                        } else if (response.message && response.message.text) {
+                            response.message.text = messageText;
+                        }
+                        if (response.error) { // if the message fails to send (according to the server)
+                            // console.error(response.error);
+                            const message = response.message;
+                            const messageElement = document.createElement('div');
+                            messageElement.classList.add('message');
+                            messageElement.innerHTML = getMessageHTML(message);
+                            messagesContainer.appendChild(messageElement);
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                            messageInput.value = ''; // clear the input field
+                            messageError(message);
+                        } else { // if the message is sent successfully (hopefully)
+                            const message = response;
+                            const messageElement = document.createElement('div');
+                            messageElement.classList.add('message');
+                            messageElement.innerHTML = getMessageHTML(response);;
+                            messagesContainer.appendChild(messageElement);
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                            messageInput.value = ''; // clear the input field
+                            saveMessage(message, message.recipient); // saving the message, the recipient would be the other user and the sender would be the current user
+                        }
+                    });
+                    // socket.once('message-error', (message) => { // if the message fails to send (according to the server) (subject to change)
+                    //     console.log(message);
+                    //     const currentChat = document.getElementById('currentChat').textContent;
+                    //     const messagehtml = document.getElementById(message.id)
+                    //     messagehtml.style.color = 'crimson';
+                    //     messagehtml.parentElement.getElementsByClassName('message-time')[0].textContent = '(Failed to send, try to open chat again)';
+                    //     db.transaction(['messages'], 'readwrite').objectStore('messages').get(currentChat).onsuccess = (event) => {
+                    //         if (!event.target.result) return;
+                    //         let messages = event.target.result.messages;
+                    //         const savedMessage = messages.find(m => m.id === message.id);
+                    //         messages = messages.filter(m => m.id !== message.id); // remove the message from the array of saved messages
+                    //         db.transaction(['messages'], 'readwrite').objectStore('messages').put(currentChat, messages); // save the messages back to the store without the failed message
+                    //     };
+                    // });
                 }
             }
         }
@@ -406,7 +401,7 @@
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
                     const request = store.get(friend);
-                    request.onsuccess = async (event) => {
+                    request.onsuccess = async (event) => { // check for a saved public key for the friend and request it if it doesn't exist
                         if (!event.target.result) {
                             socket.emit('request-public-key', friend);
                         }
@@ -434,11 +429,7 @@
                                 if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
                                 const messageElement = document.createElement('div');
                                 messageElement.classList.add('message');
-                                messageElement.innerHTML = `<div class="message-header">
-                                    <span class="message-user">${message.sender}</span>
-                                    <span class="message-time">${new Date(message.date).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                                    </div>
-                                    <p class="message-content">${message.text}</p>`;
+                                messageElement.innerHTML = getMessageHTML(message);;
                                 messagesContainer.appendChild(messageElement);
                                 messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                             });
