@@ -165,11 +165,11 @@
                 name: 'AES-GCM',
                 length: 256,
             }, true, ['encrypt', 'decrypt']);
-            const keyData = await subtle.exportKey('jwk', symmetricKey);
+            const keyData = await subtle.exportKey('jwk', symmetricKey); // exported symmetric key
             const encryptedKeyData = await subtle.encrypt({ // encrypt the symmetric key with the friend's public key
                 name: 'RSA-OAEP',
             }, publicKey, new TextEncoder().encode(JSON.stringify(keyData)));
-            socket.emit('save-symmetric-key', new TextEncoder().encode(encryptedKeyData), friend); // send the symmetric key to the server
+            socket.emit('save-symmetric-key', encryptedKeyData, friend); // send the symmetric key to the server
             // save the symmetric key in indexedDB
             const transaction = db.transaction(['keys'], 'readwrite');
             const store = transaction.objectStore('keys');
@@ -297,10 +297,9 @@
         });
 
         socket.on('save-symmetric-key', async (encryptedKeyData, friend) => { // save the symmetric key in indexedDB (if you were sent the symmetric key)
-            // encryptedKeyData = new TextDecoder().decode(encryptedKeyData);
             const symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
                 name: 'RSA-OAEP',
-            }, userPrivateKey, new Uint8Array(encryptedKeyData)).then(async decrypted => {
+            }, userPrivateKey, encryptedKeyData).then(async decrypted => {
                 decrypted = new TextDecoder().decode(decrypted);
                 const transaction = db.transaction(['keys'], 'readwrite');
                 const store = transaction.objectStore('keys');
@@ -308,74 +307,89 @@
                     username: friend, // the username of the user that the messages are for
                     symmetricKey: JSON.parse(decrypted),
                 };
-                store.put(data);
+                store.get(friend).onsuccess = (event) => {
+                    if (!event.target.result) return store.put(data);
+                    if (event.target.result) {
+                        data.publicKey = event.target.result.publicKey;
+                    }
+                    store.put(data);
+                };
             });
         })
 
         socket.on('message', async (message) => { // receive message from server
             if (message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't do anything if it's not for the current user
-            if (message.img) {
-                // await subtle.decrypt({ // decrypt the image
-                //     name: 'RSA-OAEP',
-                // }, userPrivateKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
-                //     message.img = new TextDecoder().decode(decrypted);
-                //     console.log(decrypted);
-                //     const messageElement = document.createElement('div');
-                //     messageElement.classList.add('message');
-                //     messageElement.innerHTML = getMessageHTML(message);
-                //     messagesContainer.appendChild(messageElement);
-                //     messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                //     return; // return to prevent the rest of the function from running (since i haven't added sending text and an image at the same time yet)
-                // });
-                console.log(message.key);
-                let symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
-                    name: 'RSA-OAEP',
-                }, userPrivateKey, new Uint8Array(message.key)).then(async decrypted => {
-                    // decrypted = new TextDecoder().decode(decrypted);
-                    console.log(decrypted); // FIXME - keeps returning an empty array
-                    symmetricKey = await subtle.importKey('jwk', decrypted, {
-                        name: 'AES-GCM',
-                        length: 256,
-                    }, true, ['encrypt', 'decrypt']);
-                    console.log(symmetricKey);
-                });
-                const decryptedImage = await subtle.decrypt({ // decrypt the image
+            db.transaction(['keys'], 'readonly').objectStore('keys').get(message.sender).onsuccess = async (event) => {
+                if (!event.target.result) return; // if the key doesn't exist, don't do anything
+                const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
                     name: 'AES-GCM',
-                    iv: new Uint8Array(message.iv.split('').map(c => c.charCodeAt(0))),
-                }, symmetricKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
-                    decrypted = new TextDecoder().decode(decrypted);
-                    console.log(decrypted)
-                    return decrypted;
+                    length: 256,
+                }, true, ['encrypt', 'decrypt']);
+                // if (message.img) {
+                //     // await subtle.decrypt({ // decrypt the image
+                //     //     name: 'RSA-OAEP',
+                //     // }, userPrivateKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
+                //     //     message.img = new TextDecoder().decode(decrypted);
+                //     //     console.log(decrypted);
+                //     //     const messageElement = document.createElement('div');
+                //     //     messageElement.classList.add('message');
+                //     //     messageElement.innerHTML = getMessageHTML(message);
+                //     //     messagesContainer.appendChild(messageElement);
+                //     //     messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                //     //     return; // return to prevent the rest of the function from running (since i haven't added sending text and an image at the same time yet)
+                //     // });
+                //     console.log(message.key);
+                //     let symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
+                //         name: 'RSA-OAEP',
+                //     }, userPrivateKey, new Uint8Array(message.key)).then(async decrypted => {
+                //         // decrypted = new TextDecoder().decode(decrypted);
+                //         console.log(decrypted); // FIXME - keeps returning an empty array
+                //         symmetricKey = await subtle.importKey('jwk', decrypted, {
+                //             name: 'AES-GCM',
+                //             length: 256,
+                //         }, true, ['encrypt', 'decrypt']);
+                //         console.log(symmetricKey);
+                //     });
+                //     const decryptedImage = await subtle.decrypt({ // decrypt the image
+                //         name: 'AES-GCM',
+                //         iv: new Uint8Array(message.iv.split('').map(c => c.charCodeAt(0))),
+                //     }, symmetricKey, new Uint8Array(message.img.split('').map(c => c.charCodeAt(0)))).then(decrypted => {
+                //         decrypted = new TextDecoder().decode(decrypted);
+                //         console.log(decrypted)
+                //         return decrypted;
+                //     });
+                // }
+                message.text = new Uint8Array(message.text.split('').map(c => c.charCodeAt(0))); // decode the message
+                let decryptedMessage;
+                await subtle.decrypt({ // decrypt the message
+                    name: 'AES-GCM',
+                    length: 256,
+                    iv: message.iv,
+                }, symmetricKey, message.text).then(decrypted => {
+                    decryptedMessage = new TextDecoder().decode(decrypted);
                 });
-            }
-            message.text = new Uint8Array(message.text.split('').map(c => c.charCodeAt(0))); // decode the message
-            let decryptedMessage;
-            await subtle.decrypt({ // decrypt the message
-                name: 'RSA-OAEP',
-            }, userPrivateKey, message.text).then(decrypted => {
-                decryptedMessage = new TextDecoder().decode(decrypted);
-            });
-            message.text = decryptedMessage;
-            decryptedMessage = decryptedMessage.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
-            message.date = new Date();
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message');
-            if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
-                saveMessage(message, message.sender); // in this case, the sender is the other user and the recipient is the current user
-                const chatlist = document.querySelector('.chat-list ul');
-                const friends = chatlist.getElementsByTagName('li');
-                for (let i = 0; i < friends.length; i++) {
-                    if (friends[i].textContent === message.sender) {
-                        friends[i].getElementsByClassName('message-notification-circle')[0].style.visibility = 'visible';
+                decryptedMessage = decryptedMessage.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
+                message.text = decryptedMessage;
+                message.date = new Date();
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
+                    saveMessage(message, message.sender); // in this case, the sender is the other user and the recipient is the current user
+                    const chatlist = document.querySelector('.chat-list ul');
+                    const friends = chatlist.getElementsByTagName('li');
+                    for (let i = 0; i < friends.length; i++) {
+                        if (friends[i].textContent === message.sender) {
+                            friends[i].getElementsByClassName('message-notification-circle')[0].style.visibility = 'visible';
+                        }
                     }
+                    return;
                 }
-                return;
+                messageElement.innerHTML = getMessageHTML(message);
+                messagesContainer.appendChild(messageElement);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
+                saveMessage(message, message.sender); // since we already have an if statement to not do anything if the message isn't for the current user, we can just save the message with the sender as the chat
             }
-            messageElement.innerHTML = getMessageHTML(message);
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-            document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
-            saveMessage(message, message.sender); // since we already have an if statement to not do anything if the message isn't for the current user, we can just save the message with the sender as the chat
         });
 
         let typingTimeout;
@@ -436,17 +450,24 @@
             if (messageText) {
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the public key doesn't exist, don't send the message
-                    const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
-                        name: 'RSA-OAEP',
-                        hash: 'SHA-256',
-                    }, true, ['encrypt']);
+                    // const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
+                    //     name: 'RSA-OAEP',
+                    //     hash: 'SHA-256',
+                    // }, true, ['encrypt']);
+                    const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
+                        name: 'AES-GCM',
+                        length: 256,
+                    }, true, ['encrypt', 'decrypt']);
                     const encodedMessage = new TextEncoder().encode(messageText); // encode the message (because apparently that's how you do it in subtlecrypto)
+                    const iv = crypto.getRandomValues(new Uint8Array(12)); // generate an initialization vector
                     const encrypted = await subtle.encrypt({  // encrypt the message
-                        name: 'RSA-OAEP',
-                    }, publicKey, encodedMessage);
+                        name: 'AES-GCM',
+                        iv
+                    }, symmetricKey, encodedMessage);
                     const data = {
                         text: String.fromCharCode.apply(null, new Uint8Array(encrypted)), // ngl i don't know what the fromCharCode.apply thing does but it works so i'm not gonna touch it
                         recipient: document.getElementById('currentChat').textContent,
+                        iv
                     }
                     socket.emit('message', data, (response) => { // send message to server
                         if (response.text) { // change response texts back to messageText because the server sends the message back with the base64 encoded + encrypted message

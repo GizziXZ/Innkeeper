@@ -28,6 +28,10 @@ const UsersSchema = new mongoose.Schema({
     publicKey: {
         type: String,
         required: false
+    },
+    pendingKeys: {
+        type: Object,
+        required: false
     }
 });
 
