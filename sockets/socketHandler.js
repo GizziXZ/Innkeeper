@@ -51,6 +51,12 @@ function initializeSocket(io) {
                     return io.to(userSockets[socket.username]).emit('public-key', { friend: username, publicKey: JSON.stringify(friend.publicKey) });
                 }
             });
+            socket.on('save-symmetric-key', async (encrypted, recipient) => {
+                const friend = await User.findOne({ username: recipient });
+                if (friend.friends.includes(socket.username)) {
+                    io.to(userSockets[recipient]).emit('save-symmetric-key', { encrypted, sender: socket.username });
+                }
+            });
             socket.on('message', async (message, callback) => {
                 if (!message.recipient) return;
                 if (!message.text && !message.img) return;
