@@ -200,8 +200,17 @@
             else messageText = linkify(message.text); // linkify the message
 
             function linkify(text) { // convert URLs in the message to clickable links
-                const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
-                return text.replace(urlPattern, '<a href="$1" target="_blank">$1</a>');
+                const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig; // yeah btw i have no idea what this regex is, as far as i know it's just magic
+                if (urlPattern.test(messageText)) {
+                    if (messageText.includes('open.spotify.com')) { // spotify embed
+                        const spotifyPattern = /https:\/\/open.spotify.com\/track\/([a-zA-Z0-9]+)(\?si=[a-zA-Z0-9]+)?/g;
+                        return text.replace(spotifyPattern, '<iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/$1" width="80%" height="152" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture;" loading="lazy"></iframe>');
+                    }
+
+                    // more embeds soon eventually. i tried to add tenor links but it's just not working
+                }
+                // if there's still a url pattern
+                if (urlPattern.test(text)) return text.replace(urlPattern, '<a href="$1" target="_blank">$1</a>');
             }
 
             let messageHTML = `<div class="message-header">
