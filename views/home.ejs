@@ -57,7 +57,7 @@
             <p id="typingIndicator"></p>
             <footer>
                 <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off" disabled>
-                <input id="fileInput" type="file" accept="image/*" style="display: none;" onchange="uploadImage(event)">
+                <input id="fileInput" type="file" accept="image/*,video/*" style="display: none;" onchange="uploadMedia(event)">
                 <button id="upload" onclick="document.getElementById('fileInput').click()" disabled>+</button>
             </footer>
         </main>
@@ -83,9 +83,9 @@
         </div>
     </div>
 
-    <div id="imageModal" class="modal">
+    <div id="mediaModal" class="modal">
         <!-- <span class="close" onclick="closeModal()">&times;</span> -->
-        <img class="image-modal" id="modalImage">
+        <!-- <img class="media-modal" id="modalImage"> -->
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -194,21 +194,25 @@
         function getMessageHTML(message) { // get the default HTML for a message
             if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
             if (!message.date) message.date = new Date();
-            if (!message.img) message.img = '';
+            if (!message.media) message.media = '';
             if (!message.text) message.text = '';
-            return `<div class="message-header">
+            let messageHTML = `<div class="message-header">
                     <span class="message-user">${message.sender}</span>
                     <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
                     </div>
-                    <p class="message-content" id="${message.id}">${message.text}</p>
-                    <img src="${message.img}" style="max-width: 20vw; max-height: 20vh; object-fit: contain;">`;
+                    <p class="message-content" id="${message.id}">${message.text}</p>`;
+            if (message.media.startsWith('data:image/')) messageHTML = messageHTML + `<img src="${message.media}" style="max-width: 20vw; max-height: 20vh; object-fit: contain;">`;
+            if (message.media.startsWith('data:video/')) messageHTML = messageHTML + `<video src="${message.media}" style="max-width: 30vw; max-height: 30vh; object-fit: contain;" controls></video>`;
+            return messageHTML;
         }
 
-        function uploadImage(event) {
+        // i feel like the user being able to change the html and being upload another kind of file (that isnt an image) is some kind of security risk but i don't know
+
+        function uploadMedia(event) {
         const file = event.target.files[0];
             const reader = new FileReader();
             reader.onload = (event) => {
-                const image = event.target.result;
+                const media = event.target.result;
                 const recipient = document.getElementById('currentChat').textContent;
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the public key doesn't exist, don't send
@@ -217,12 +221,12 @@
                         length: 256,
                     }, true, ['encrypt', 'decrypt']);
                     const iv = crypto.getRandomValues(new Uint8Array(12)); // generate an initialization vector
-                    const encrypted = await subtle.encrypt({ // encrypt the image
+                    const encrypted = await subtle.encrypt({ // encrypt the media
                         name: 'AES-GCM',
                         iv
-                    }, symmetricKey, new TextEncoder().encode(image));
+                    }, symmetricKey, new TextEncoder().encode(media));
                     const data = {
-                        img: encrypted,
+                        media: encrypted,
                         iv,
                         recipient,
                     };
@@ -231,12 +235,21 @@
                         // display the image
                         const messageElement = document.createElement('div');
                         messageElement.classList.add('message');
-                        response.img = image;
+                        response.media = media;
                         messageElement.innerHTML = getMessageHTML(response);
                         messagesContainer.appendChild(messageElement);
-                        messageElement.querySelector('img').addEventListener('load', () => {
-                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
-                        });
+                        const imgElement = messageElement.querySelector('img');
+                        if (imgElement) {
+                            imgElement.addEventListener('load', () => {
+                                messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
+                            });
+                        }
+                        const videoElement = messageElement.querySelector('video');
+                        if (videoElement) {
+                            videoElement.addEventListener('loadedmetadata', () => {
+                                messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
+                            });
+                        }
                         saveMessage(response, response.recipient);
                     })
                 }
@@ -312,7 +325,7 @@
                     name: 'AES-GCM',
                     length: 256,
                 }, true, ['encrypt', 'decrypt']);
-                if (message.img) {
+                if (message.media) {
                     const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
                         name: 'AES-GCM',
                         length: 256,
@@ -320,9 +333,9 @@
                     const decryptedImage = await subtle.decrypt({ // decrypt the image
                         name: 'AES-GCM',
                         iv: message.iv,
-                    }, symmetricKey, new Uint8Array(message.img)).then(decrypted => {
+                    }, symmetricKey, new Uint8Array(message.media)).then(decrypted => {
                         decrypted = new TextDecoder().decode(decrypted);
-                        message.img = decrypted; // set the image to the decrypted image (im still in shock that my code finally works)
+                        message.media = decrypted; // set the image to the decrypted image (im still in shock that my code finally works)
                     });
                 } else { // NOTE - probably going to remove this else statement at some point so that we can send text + images at the same time
                     message.text = new Uint8Array(message.text.split('').map(c => c.charCodeAt(0))); // decode the message
@@ -353,10 +366,20 @@
                 }
                 messageElement.innerHTML = getMessageHTML(message);
                 messagesContainer.appendChild(messageElement);
-                if (message.img) messageElement.querySelector('img').addEventListener('load', () => {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                });
-                else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                if (message.media) {
+                    const imgElement = messageElement.querySelector('img');
+                    if (imgElement) {
+                        imgElement.addEventListener('load', () => {
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
+                        });
+                    }
+                    const videoElement = messageElement.querySelector('video');
+                    if (videoElement) {
+                        videoElement.addEventListener('loadedmetadata', () => {
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom
+                        });
+                    }
+                } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                 document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when message is received
                 saveMessage(message, message.sender); // since we already have an if statement to not do anything if the message isn't for the current user, we can just save the message with the sender as the chat
             }
@@ -474,13 +497,18 @@
             try {
                 await init();
                 refreshPromise = new Promise(async (resolve) => {
-                const modal = document.getElementById('imageModal');
-                const modalImg = document.getElementById('modalImage');
+                const modal = document.getElementById('mediaModal');
+                const modalMedia = document.createElement('div');
+                modalMedia.id = 'modalMedia';
                 document.body.addEventListener('click', (event) => { // "event delegation" or whatever the fuck that means
-                    if (event.target.tagName === 'IMG' && event.target.id !== 'modalImage') {
+                    if (event.target.tagName === 'IMG' && event.target.id !== 'modalMedia') {
                         modal.style.display = 'block';
-                        modalImg.src = event.target.src;
-                    } else if (event.target === modal ) {
+                        const img = document.createElement('img')
+                        img.classList.add('media-modal')
+                        img.src = event.target.src;
+                        modal.appendChild(modalMedia).appendChild(img)
+                    } else if (event.target === modal) {
+                        modalMedia.replaceChildren('');
                         closeModal();
                     }
                 });
@@ -557,10 +585,20 @@
                                 messageElement.classList.add('message');
                                 messageElement.innerHTML = getMessageHTML(message);;
                                 messagesContainer.appendChild(messageElement);
-                                if (message.img) messageElement.querySelector('img').addEventListener('load', () => { // doing this on EVERY message might be kind of bad if the user has a poor internet connection?
-                                    messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom if the image is loaded
-                                });
-                                else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                                if (message.media) {
+                                    const imgElement = messageElement.querySelector('img');
+                                    if (imgElement) {
+                                        imgElement.addEventListener('load', () => {
+                                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                        });
+                                    }
+                                    const videoElement = messageElement.querySelector('video');
+                                    if (videoElement) {
+                                        videoElement.addEventListener('loadedmetadata', () => {
+                                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                        });
+                                    }
+                                } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                             });
                         };
                         notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened

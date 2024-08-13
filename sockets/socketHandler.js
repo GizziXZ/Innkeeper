@@ -63,7 +63,7 @@ function initializeSocket(io) {
             });
             socket.on('message', async (message, callback) => {
                 if (!message.recipient) return;
-                if (!message.text && !message.img) return;
+                if (!message.text && !message.media) return;
                 const recipient = message.recipient;
                 if (recipient) {
                     message.sender = socket.username;

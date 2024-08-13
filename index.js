@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// TODO - feature discord has where you click on the image and it makes it bigger in the middle of your screen
+// TODO - gif sharing
 // TODO - group chats
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {

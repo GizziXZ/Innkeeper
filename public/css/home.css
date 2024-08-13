@@ -381,15 +381,24 @@ footer input:focus {
     border-radius: 5px;
 }
 
-.image-modal {
+@keyframes media-modal-animation {
+    from {
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    to {
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.media-modal {
     background-color: #36393f;
     max-width: 70vw;
     max-height: 70vh;
     top: 50%;
     left: 50%;
     position: fixed;
-    transform: translate(-50%, -50%);
     object-fit: contain;
+    animation: media-modal-animation 0.3s forwards;
 }
 
 .close {
