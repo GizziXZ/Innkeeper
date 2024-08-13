@@ -21,6 +21,7 @@ const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik
 
 // TODO - keys are buggy, need to make better key management
 // TODO - group chats
+// TODO - possibly voice chat soon
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,

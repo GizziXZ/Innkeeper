@@ -6,7 +6,7 @@ const config = require('../config.json');
 
 const userSockets = {};
 
-async function handleUserConnection(socket, io) {
+async function handleUserConnection(socket, io) { // when a user connects, update their online status and tell their friends that they are online
     const user = await User.findOne({ username: socket.username });
     user.online = true;
     await user.save();
@@ -26,8 +26,12 @@ function initializeSocket(io) {
             socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
             if (!socket.username) return socket.disconnect();
             userSockets[socket.username] = socket.id;
-
             handleUserConnection(socket, io);
+            socket.on('pending-key', async (callback) => { // when a user connects they will ask for pending keys to update their chats
+                const pendingKeys = (await User.findOne({ username: socket.username })).pendingKeys;
+                callback(pendingKeys);
+                // delete the pending keys after sending them
+            })
             socket.on('disconnect', () => {
                 delete userSockets[socket.username];
                 setTimeout(async () => {
@@ -54,9 +58,17 @@ function initializeSocket(io) {
             socket.on('save-symmetric-key', async (encrypted, recipient) => {
                 const friend = await User.findOne({ username: recipient });
                 if (friend.friends.includes(socket.username)) {
-                    if (!userSockets[recipient]) { // TODO - pending system
-                        friend.pendingKeys[socket.username] = encrypted; // TODO - need to make sure this is deleted after being handled eventually
-                        return await friend.save();
+                    if (!userSockets[recipient]) {
+                        if (!friend.pendingKeys) friend.pendingKeys = [];
+                        const existingKeyIndex = friend.pendingKeys.findIndex(key => key.hasOwnProperty(socket.username)); // check if there is already a pending key from this user
+                        if (existingKeyIndex !== -1) {
+                            friend.pendingKeys[existingKeyIndex][socket.username] = encrypted.toString('base64'); // update the key if it already exists
+                        } else {
+                            friend.pendingKeys.push({ [socket.username]: encrypted.toString('base64') }); // push the key if it doesn't exist
+                        }
+                        // console.log(friend.pendingKeys);
+                        await friend.save();
+                        return;
                     }
                     io.to(userSockets[recipient]).emit('save-symmetric-key', encrypted, socket.username);
                 }

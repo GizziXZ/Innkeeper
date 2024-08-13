@@ -30,7 +30,7 @@ const UsersSchema = new mongoose.Schema({
         required: false
     },
     pendingKeys: {
-        type: Object,
+        type: Array,
         required: false
     }
 });
