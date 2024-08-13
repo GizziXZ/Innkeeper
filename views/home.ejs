@@ -83,6 +83,11 @@
         </div>
     </div>
 
+    <div id="imageModal" class="modal">
+        <!-- <span class="close" onclick="closeModal()">&times;</span> -->
+        <img class="image-modal" id="modalImage">
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script> // SECTION - Client-side JavaScript
         let refreshPromise = null;
@@ -196,7 +201,7 @@
                     <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
                     </div>
                     <p class="message-content" id="${message.id}">${message.text}</p>
-                    <img src="${message.img}" style="max-width: 200px; max-height: 300px;">`;
+                    <img src="${message.img}" style="max-width: 20vw; max-height: 20vh; object-fit: contain;">`;
         }
 
         function uploadImage(event) {
@@ -348,9 +353,7 @@
                 }
                 messageElement.innerHTML = getMessageHTML(message);
                 messagesContainer.appendChild(messageElement);
-                // Wait for the image to load
                 if (message.img) messageElement.querySelector('img').addEventListener('load', () => {
-                    // Scroll to the bottom of the messages
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 });
                 else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
@@ -471,6 +474,16 @@
             try {
                 await init();
                 refreshPromise = new Promise(async (resolve) => {
+                const modal = document.getElementById('imageModal');
+                const modalImg = document.getElementById('modalImage');
+                document.body.addEventListener('click', (event) => { // "event delegation" or whatever the fuck that means
+                    if (event.target.tagName === 'IMG' && event.target.id !== 'modalImage') {
+                        modal.style.display = 'block';
+                        modalImg.src = event.target.src;
+                    } else if (event.target === modal ) {
+                        closeModal();
+                    }
+                });
                 const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
                 let userKey;
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
@@ -695,8 +708,9 @@
         }
 
         function closeModal() { // just closes the modals
-            document.getElementById('addUserModal').style.display = 'none';
-            document.getElementById('friendsModal').style.display = 'none';
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
         }
 
         async function submitUser() { // used for adding friends
