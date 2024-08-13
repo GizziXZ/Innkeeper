@@ -175,6 +175,11 @@ header h1 {
     white-space: pre-wrap;
 }
 
+.message-content a {
+    color: #0066d3;
+    text-decoration: none;
+}
+
 #typingIndicator {
     display: none;
     color: #b9bbbe;

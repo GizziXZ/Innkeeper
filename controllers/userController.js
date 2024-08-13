@@ -73,7 +73,7 @@ exports.register = async (req, res) => {
     }
 }
 
-exports.addFriend = async (req, res) => {
+exports.addFriend = async (req, res, io) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     
@@ -108,7 +108,7 @@ exports.addFriend = async (req, res) => {
     }
 }
 
-exports.removeFriend = async (req, res) => {
+exports.removeFriend = async (req, res, io) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     
@@ -128,7 +128,7 @@ exports.removeFriend = async (req, res) => {
     }
 }
 
-exports.friendRequests = async (req, res) => {
+exports.friendRequests = async (req, res, io) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {

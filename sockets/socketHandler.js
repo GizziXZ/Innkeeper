@@ -54,7 +54,7 @@ function initializeSocket(io) {
             socket.on('save-symmetric-key', async (encrypted, recipient) => {
                 const friend = await User.findOne({ username: recipient });
                 if (friend.friends.includes(socket.username)) {
-                    if (!userSockets[recipient]) {
+                    if (!userSockets[recipient]) { // TODO - pending system
                         friend.pendingKeys[socket.username] = encrypted; // TODO - need to make sure this is deleted after being handled eventually
                         return await friend.save();
                     }

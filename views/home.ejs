@@ -192,16 +192,24 @@
         }
 
         function getMessageHTML(message) { // get the default HTML for a message
+            let messageText = message.text;
             if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
             if (!message.date) message.date = new Date();
             if (!message.media) message.media = '';
             if (!message.text) message.text = '';
+            else messageText = linkify(message.text); // linkify the message
+
+            function linkify(text) { // convert URLs in the message to clickable links
+                const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+                return text.replace(urlPattern, '<a href="$1" target="_blank">$1</a>');
+            }
+
             let messageHTML = `<div class="message-header">
                     <span class="message-user">${message.sender}</span>
                     <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
                     </div>
-                    <p class="message-content" id="${message.id}">${message.text}</p>`;
-            if (message.media.startsWith('data:image/')) messageHTML = messageHTML + `<img src="${message.media}" style="max-width: 20vw; max-height: 20vh; object-fit: contain;">`;
+                    <p class="message-content" id="${message.id}">${messageText}</p>`;
+            if (message.media.startsWith('data:image/')) messageHTML = messageHTML + `<img src="${message.media}" style="max-width: 25vw; max-height: 25vh; object-fit: contain;">`;
             if (message.media.startsWith('data:video/')) messageHTML = messageHTML + `<video src="${message.media}" style="max-width: 30vw; max-height: 30vh; object-fit: contain;" controls></video>`;
             return messageHTML;
         }
@@ -209,7 +217,7 @@
         // i feel like the user being able to change the html and being upload another kind of file (that isnt an image) is some kind of security risk but i don't know
 
         function uploadMedia(event) {
-        const file = event.target.files[0];
+            const file = event.target.files[0];
             const reader = new FileReader();
             reader.onload = (event) => {
                 const media = event.target.result;
@@ -225,13 +233,25 @@
                         name: 'AES-GCM',
                         iv
                     }, symmetricKey, new TextEncoder().encode(media));
-                    const data = {
+                    let rawText;
+                    let data = {
                         media: encrypted,
                         iv,
                         recipient,
                     };
+                    if (messageInput.value) { // this is to send text and media at the same time
+                        rawText = messageInput.value;
+                        const encryptedText = await subtle.encrypt({  // encrypt the message
+                            name: 'AES-GCM',
+                            iv
+                        }, symmetricKey, new TextEncoder().encode(messageInput.value));
+                        data.text = String.fromCharCode.apply(null, new Uint8Array(encryptedText));
+                    };
+                    if (encrypted.byteLength > 1e7) return alert('File is too large!'); // if the file is too large, don't send it
                     socket.emit('message', data, (response) => {
                         if (response.error) return console.error('Failed to send image:', response.error);
+                        messageInput.value = ''; // clear the input field
+                        if (rawText) response.text = rawText;
                         // display the image
                         const messageElement = document.createElement('div');
                         messageElement.classList.add('message');
@@ -254,7 +274,9 @@
                     })
                 }
             };
-            return reader.readAsDataURL(file);
+            reader.readAsDataURL(file);
+            event.target.value = ''; // resetting the input value so the same file can be uploaded again
+            return;
         }
 
         function messageError(message) {
@@ -321,15 +343,12 @@
             if (message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't do anything if it's not for the current user
             db.transaction(['keys'], 'readonly').objectStore('keys').get(message.sender).onsuccess = async (event) => {
                 if (!event.target.result) return; // if the key doesn't exist, don't do anything
+                // sometimes there'll be an error with no message attached, it's usually because of the decrypt() using the wrong key
                 const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
                     name: 'AES-GCM',
                     length: 256,
                 }, true, ['encrypt', 'decrypt']);
                 if (message.media) {
-                    const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
-                        name: 'AES-GCM',
-                        length: 256,
-                    }, true, ['encrypt', 'decrypt']);
                     const decryptedImage = await subtle.decrypt({ // decrypt the image
                         name: 'AES-GCM',
                         iv: message.iv,
@@ -337,7 +356,8 @@
                         decrypted = new TextDecoder().decode(decrypted);
                         message.media = decrypted; // set the image to the decrypted image (im still in shock that my code finally works)
                     });
-                } else { // NOTE - probably going to remove this else statement at some point so that we can send text + images at the same time
+                }
+                if (message.text) {
                     message.text = new Uint8Array(message.text.split('').map(c => c.charCodeAt(0))); // decode the message
                     let decryptedMessage;
                     await subtle.decrypt({ // decrypt the message
@@ -439,14 +459,9 @@
 
         async function sendMessage() {
             let messageText = messageInput.value;
-            messageText = messageText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); // escape html characters to prevent an exploit
             if (messageText) {
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementById('currentChat').textContent).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the public key doesn't exist, don't send the message
-                    // const publicKey = await subtle.importKey('jwk', event.target.result.publicKey, {
-                    //     name: 'RSA-OAEP',
-                    //     hash: 'SHA-256',
-                    // }, true, ['encrypt']);
                     const symmetricKey = await subtle.importKey('jwk', event.target.result.symmetricKey, {
                         name: 'AES-GCM',
                         length: 256,
@@ -513,7 +528,6 @@
                     }
                 });
                 const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
-                let userKey;
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
                     if (!event.target.result) { // if the user isn't in store, generate a key pair
                         const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
