@@ -10,6 +10,15 @@ body {
     margin: 0;
 }
 
+h1 {
+    color: aliceblue;
+    text-align: center;
+    position: fixed;
+    margin-top: -15px;
+    margin-left: 110px;
+    font: small-caption;
+}
+
 h2 {
     color: #23272A;
     text-align: center;

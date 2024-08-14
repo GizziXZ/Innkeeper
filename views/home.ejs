@@ -322,12 +322,27 @@
         });
 
         socket.emit('pending-key', (keys) => { // this should happen on connecting, it will send all the pending keys for the client to manage
-            console.log(keys);
-            keys.forEach(keyObject => {
+            // console.log(keys);
+            keys.forEach(async keyObject => {
                 const friend = Object.keys(keyObject)[0];
                 let key = keyObject[friend];
                 key = new Uint8Array(atob(key).split('').map(c => c.charCodeAt(0))); // decoded key
-                console.log(key);
+                key = await subtle.decrypt({ // decrypt the key
+                    name: 'RSA-OAEP',
+                }, userPrivateKey, key)
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                const data = {
+                    username: friend,
+                    symmetricKey: JSON.parse(new TextDecoder().decode(key)),
+                };
+                store.get(friend).onsuccess = (event) => {
+                    if (!event.target.result) return store.put(data);
+                    if (event.target.result) {
+                        data.publicKey = event.target.result.publicKey;
+                    }
+                    store.put(data);
+                };
             })
         });
 

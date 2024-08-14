@@ -28,9 +28,11 @@ function initializeSocket(io) {
             userSockets[socket.username] = socket.id;
             handleUserConnection(socket, io);
             socket.on('pending-key', async (callback) => { // when a user connects they will ask for pending keys to update their chats
-                const pendingKeys = (await User.findOne({ username: socket.username })).pendingKeys;
-                callback(pendingKeys);
+                const user = await User.findOne({ username: socket.username });
+                callback(user.pendingKeys);
                 // delete the pending keys after sending them
+                user.pendingKeys = [];
+                await user.save();
             })
             socket.on('disconnect', () => {
                 delete userSockets[socket.username];
@@ -62,11 +64,9 @@ function initializeSocket(io) {
                         if (!friend.pendingKeys) friend.pendingKeys = [];
                         const existingKeyIndex = friend.pendingKeys.findIndex(key => key.hasOwnProperty(socket.username)); // check if there is already a pending key from this user
                         if (existingKeyIndex !== -1) {
-                            friend.pendingKeys[existingKeyIndex][socket.username] = encrypted.toString('base64'); // update the key if it already exists
-                        } else {
-                            friend.pendingKeys.push({ [socket.username]: encrypted.toString('base64') }); // push the key if it doesn't exist
+                            friend.pendingKeys.splice(existingKeyIndex, 1); // remove the key if it already exists to replace it
                         }
-                        // console.log(friend.pendingKeys);
+                        friend.pendingKeys.push({ [socket.username]: encrypted.toString('base64') }); // push the key
                         await friend.save();
                         return;
                     }
