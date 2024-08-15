@@ -101,10 +101,10 @@ function initializeSocket(io) {
                 }
                 users.push(socket.username); // add the user to the group chat
                 const room = users.sort().join('-');
-                users.forEach(user => io.to(userSockets[user]).emit('join-groupchat', {room, key: users[user]})); // tell the users to join the group chat
+                users.forEach(user => {if (user !== socket.username) io.to(userSockets[user]).emit('join-groupchat', room, {key: users[user]})}); // tell the users to join the group chat
                 callback(room); // response ok to the client
             });
-            socket.on('join-groupchat', async (room, callback) => {
+            socket.on('join-groupchat', async (room, callback) => { // we are not sending back the key because the client should already have it, if not that's on them and the gc will need to be recreated (this is on purpose for security)
                 const users = room.split('-'); // get the users in the group chat
                 if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
                 socket.join(room); // actually join the socket room

@@ -142,6 +142,16 @@
         async function init() {
             try {
                 db = await openDatabase();
+                const transaction = db.transaction(['keys'], 'readonly');
+                const store = transaction.objectStore('keys');
+                const users = store.getAll();
+                users.onsuccess = (event) => {
+                    const result = event.target.result;
+                    result.forEach(user => { // we're trying to get all the groupchats to join their rooms
+                        if (user.type !== 'group') return;
+                        socket.emit('join-groupchat', user.username);
+                    });
+                };
                 // console.log('Database loaded successfully');
             } catch (error) {
                 console.error('Failed to load the database:', error);
@@ -340,26 +350,32 @@
                 length: 256,
             }, true, ['encrypt', 'decrypt']));
             let selectedKeys = {}; // { "user1": "key1", "user2": "key2" }
-            selectedFriends.forEach(async friend => {
+            await Promise.all(selectedFriends.map(async friend => {
                 let publicKey = await new Promise((resolve, reject) => {
-                    db.transaction(['keys'], 'readonly').objectStore('keys').get(friend).onsuccess = (event) => {
+                    const request = db.transaction(['keys'], 'readonly').objectStore('keys').get(friend);
+                    request.onsuccess = (event) => {
                         if (!event.target.result) {
-                            socket.emit('request-public-key', friend, (response) => resolve(response));
-                            savePublicKey(friend, response); // save the public key in indexedDB
+                            socket.emit('request-public-key', friend, (response) => {
+                                resolve(response);
+                                savePublicKey(friend, response); // save the public key in indexedDB
+                            });
                             return;
                         }
                         resolve(event.target.result.publicKey);
                     };
                 });
-                publicKey = await subtle.importKey('jwk', publicKey, { // import the public key
+                
+                publicKey = await subtle.importKey('jwk', publicKey, { // REVIEW - hopefully i don't need to parse the public key twice??
                     name: 'RSA-OAEP',
                     hash: 'SHA-256',
                 }, true, ['encrypt']);
-                const encryptedKeyData = await subtle.encrypt({ // encrypt the symmetric key with the friend's public key
+                
+                const encryptedKeyData = await subtle.encrypt({
                     name: 'RSA-OAEP',
-                }, JSON.parse(publicKey), new TextEncoder().encode(JSON.stringify(symmetricKey))); // REVIEW - hopefully i don't need to parse the public key twice??
+                }, publicKey, new TextEncoder().encode(JSON.stringify(symmetricKey)));
+                
                 selectedKeys[friend] = encryptedKeyData;
-            });
+            }));
             socket.emit('create-groupchat', (selectedKeys), (response) => {
                 if (response.error) return alert(response.error);
                 document.getElementById('dropdown-content').style.display = 'none'; // close back the dropdown
@@ -370,8 +386,10 @@
                     const data = {
                         username: response.room,
                         symmetricKey,
+                        type: 'group' // used for identification
                     };
                     store.put(data);
+                    refresh(); // refresh to show the new groupchat
                 }
             });
         }
@@ -432,6 +450,24 @@
                     store.put(data);
                 };
             })
+        });
+
+        socket.on('join-groupchat', async (room, key) => {
+            console.log(key);
+            key = await subtle.decrypt({ // decrypt the key
+                name: 'RSA-OAEP',
+            }, userPrivateKey, key).then(decrypted => {
+                decrypted = new TextDecoder().decode(decrypted); // do i have to parse this?
+                console.log(decrypted);
+            });
+            const transaction = db.transaction(['keys'], 'readwrite');
+            const store = transaction.objectStore('keys');
+            const data = {
+                username: room,
+                symmetricKey: key,
+            };
+            store.put(data);
+            refresh();
         });
 
         socket.on('public-key', async (data) => { // save the public key of the friend in the local storage
@@ -677,6 +713,62 @@
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
                 // chatlist.innerHTML = ''; // Clear existing list items
+
+                // SECTION - list groupchats saved in indexedDB (I NEED TO MAKE THIS A FUNCTION)
+                const groupchatsTransaction = db.transaction(['keys'], 'readonly');
+                const groupchatsStore = groupchatsTransaction.objectStore('keys');
+                const groupchatsRequest = groupchatsStore.getAll();
+                groupchatsRequest.onsuccess = async (event) => {
+                    const groupchats = event.target.result;
+                    groupchats.forEach(groupchat => {
+                        const li = document.createElement('li');
+                        // const notificationCircle = document.createElement('span');
+                        // notificationCircle.classList.add('message-notification-circle');
+                        // notificationCircle.style.visibility = 'hidden';
+                        li.textContent = groupchat.username;
+                        li.addEventListener('click', async () => { // switch the chat to the selected groupchat
+                            messageInput.removeAttribute('disabled'); // enable the message input field
+                            document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
+                            document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
+                            document.getElementById('create-gc').style.display = 'none'; // hide the create groupchat button
+                            currentChat.textContent = groupchat.username;
+                            messagesContainer.innerHTML = ''; // Clear existing messages
+                            const messagesTransaction = db.transaction(['messages'], 'readonly');
+                            const messagesStore = messagesTransaction.objectStore('messages');
+                            const messagesRequest = messagesStore.get(groupchat.username);
+
+                            messagesRequest.onsuccess = (event) => { // after the messages are grabbed from storage, display them
+                                if (!event.target.result) return;
+                                const messages = event.target.result.messages || [];
+                                messages.forEach(message => {
+                                    if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
+                                    const messageElement = document.createElement('div');
+                                    messageElement.classList.add('message');
+                                    messageElement.innerHTML = getMessageHTML(message); // get the default HTML for a message
+                                    messagesContainer.appendChild(messageElement);
+                                    if (message.media) {
+                                        const imgElement = messageElement.querySelector('img');
+                                        if (imgElement) {
+                                            imgElement.addEventListener('load', () => {
+                                                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                            });
+                                        }
+                                        const videoElement = messageElement.querySelector('video');
+                                        if (videoElement) {
+                                            videoElement.addEventListener('loadedmetadata', () => {
+                                                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                            });
+                                        }
+                                    } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                                });
+                            };
+                            // notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
+                            messageInput.focus();
+                        });
+                    }
+                )};
+                //!SECTION
+
                 let response = await fetch('/friends', { // Fetch the list of friends from the server
                     method: 'GET',
                     credentials: "include",
