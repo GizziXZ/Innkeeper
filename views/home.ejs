@@ -31,6 +31,16 @@
                 <h1 id="currentChat"></h1>
                 <div class="header-buttons">
                     <!-- <button onclick="window.location.href='/profile'">Profile</button> -->
+                    <div class="dropdown">
+                        <button id="create-gc" style="display: none;" onclick="toggleDropdown()">Create Groupchat</button>
+                        <div id="dropdown-content" class="dropdown-content" style="display: none;">
+                            <p>Friends:</p>
+                            <form id="friends-form">
+
+                            </form>
+                            <button onclick="createGroupchat()">Create</button>
+                        </div>
+                    </div>
                     <button onclick="window.location.href='/logout'">Logout</button>
                 </div>
             </header>
@@ -97,6 +107,7 @@
             }
         });
         const { subtle } = window.crypto;
+        let localFriends = []; // array to store friends locally
         let db;
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
@@ -286,6 +297,43 @@
             reader.readAsDataURL(file);
             event.target.value = ''; // resetting the input value so the same file can be uploaded again
             return;
+        }
+
+        function toggleDropdown() {
+            var dropdownContent = document.getElementById("dropdown-content");
+            if (dropdownContent.style.display === "none") {
+                dropdownContent.style.display = "flex";
+                populateDropdown();
+            } else {
+                dropdownContent.style.display = "none";
+            }
+        }
+
+        function populateDropdown() {
+            let form = document.getElementById("friends-form");
+            form.innerHTML = '';
+
+            localFriends.forEach(friend => {
+                let checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = friend;
+                checkbox.value = friend;
+                checkbox.id = friend;
+
+                let label = document.createElement('label');
+                label.htmlFor = friend;
+                label.appendChild(document.createTextNode(friend));
+
+                form.appendChild(checkbox);
+                form.appendChild(label);
+                form.appendChild(document.createElement('br'));
+            });
+        }
+
+        function createGroupchat() {
+            const selected = document.getElementById('friends-form').querySelectorAll('input[type="checkbox"]:checked')
+            const selectedFriends = Array.from(selected).map(checkbox => checkbox.value);
+            console.log(selected);
         }
 
         function messageError(message) {
@@ -599,6 +647,7 @@
                 }
 
                 let friends = await response.json();
+                localFriends = friends; // store the friends locally
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
@@ -618,6 +667,7 @@
                         messageInput.removeAttribute('disabled'); // enable the message input field
                         document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
                         document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
+                        document.getElementById('create-gc').style.display = 'block'; // show the create groupchat button
                         currentChat.textContent = friend;
                         messagesContainer.innerHTML = ''; // Clear existing messages
                         const messagesTransaction = db.transaction(['messages'], 'readonly');
@@ -779,6 +829,7 @@
                     throw new Error('Failed to remove friend');
                 }
 
+                localFriends = localFriends.filter(f => f !== contextMenu.friend);
                 contextMenu.style.display = 'none';
                 const chatlist = document.querySelector('.chat-list ul');
                 chatlist.innerHTML = ''; // Clear existing list items

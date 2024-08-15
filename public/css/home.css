@@ -135,6 +135,32 @@ header h1 {
     background-color: #4752c4;
 }
 
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    flex-direction: column;
+    align-items: center;
+    border-radius: 8px;
+    position: absolute;
+    background-color: #202225;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
+.dropdown-content p {
+    color: white;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content #friends-form {
+    padding: 10px;
+}
+
 .messages {
     flex-grow: 1;
     padding: 10px;
