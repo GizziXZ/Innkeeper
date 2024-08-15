@@ -365,7 +365,7 @@
                     };
                 });
                 
-                publicKey = await subtle.importKey('jwk', publicKey, { // REVIEW - hopefully i don't need to parse the public key twice??
+                publicKey = await subtle.importKey('jwk', publicKey, {
                     name: 'RSA-OAEP',
                     hash: 'SHA-256',
                 }, true, ['encrypt']);
@@ -379,12 +379,12 @@
             socket.emit('create-groupchat', (selectedKeys), (response) => {
                 if (response.error) return alert(response.error);
                 document.getElementById('dropdown-content').style.display = 'none'; // close back the dropdown
-                if (response.ok) {
+                if (response) {
                     // save the groupchat in indexedDB first
                     const transaction = db.transaction(['keys'], 'readwrite');
                     const store = transaction.objectStore('keys');
                     const data = {
-                        username: response.room,
+                        username: response, // response is the name of the groupchat/room
                         symmetricKey,
                         type: 'group' // used for identification
                     };
@@ -453,21 +453,20 @@
         });
 
         socket.on('join-groupchat', async (room, key) => {
-            console.log(key);
-            key = await subtle.decrypt({ // decrypt the key
+            key = key.key; // get the key from the object
+            await subtle.decrypt({ // decrypt the key
                 name: 'RSA-OAEP',
             }, userPrivateKey, key).then(decrypted => {
-                decrypted = new TextDecoder().decode(decrypted); // do i have to parse this?
-                console.log(decrypted);
+                decrypted = JSON.parse(new TextDecoder().decode(decrypted));
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                const data = {
+                    username: room,
+                    symmetricKey: decrypted,
+                };
+                store.put(data);
+                refresh();
             });
-            const transaction = db.transaction(['keys'], 'readwrite');
-            const store = transaction.objectStore('keys');
-            const data = {
-                username: room,
-                symmetricKey: key,
-            };
-            store.put(data);
-            refresh();
         });
 
         socket.on('public-key', async (data) => { // save the public key of the friend in the local storage
@@ -721,6 +720,7 @@
                 groupchatsRequest.onsuccess = async (event) => {
                     const groupchats = event.target.result;
                     groupchats.forEach(groupchat => {
+                        if (groupchat.type !== 'group') return;
                         const li = document.createElement('li');
                         // const notificationCircle = document.createElement('span');
                         // notificationCircle.classList.add('message-notification-circle');

@@ -7,17 +7,21 @@ const config = require('../config.json');
 const userSockets = {};
 
 async function handleUserConnection(socket, io) { // when a user connects, update their online status and tell their friends that they are online
-    const user = await User.findOne({ username: socket.username });
-    user.online = true;
-    await user.save();
-    const friends = user.friends;
-    const onlineFriends = friends.filter(friend => userSockets[friend]);
-    onlineFriends.forEach(friend => {
-        const room = [socket.username, friend].sort().join('-');
-        socket.join(room); // join a room with the user and their friend
-        io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
-        io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
-    });
+    try {
+        const user = await User.findOne({ username: socket.username });
+        user.online = true;
+        await user.save();
+        const friends = user.friends;
+        const onlineFriends = friends.filter(friend => userSockets[friend]);
+        onlineFriends.forEach(friend => {
+            const room = [socket.username, friend].sort().join('-');
+            socket.join(room); // join a room with the user and their friend
+            io.in(userSockets[friend]).emit('online', socket.username); // tell the online friends that the user is online
+            io.in(userSockets[socket.username]).emit('online', friend); // tell the user that their online friends are online
+        });
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 function initializeSocket(io) {
@@ -91,24 +95,25 @@ function initializeSocket(io) {
                 }
             });
             socket.on('create-groupchat', async (users, callback) => { // users is an object with the user + encrypted symmetric key (encrypted using their public key)
-                if (Object.keys(users).length <= 2) return callback({ error: 'You need atleast 2 other users to create a group chat' });
-                if (io.sockets.adapter.rooms.get(users.sort().join('-'))) return callback({ error: 'Group chat already exists' }); // REVIEW this line (this might not be how you check if a room exists)
+                const usersArray = Object.keys(users);
+                if (usersArray.length < 2) return callback({ error: 'You need atleast 2 other users to create a group chat' });
+                if (io.sockets.adapter.rooms.get(Object.keys(users).sort().join('-'))) return callback({ error: 'Group chat already exists' }); // REVIEW this line (this might not be how you check if a room exists)
                 // Check if all users are online
-                for (let i = 0; i < Object.keys(users).length; i++) {
-                    if (!userSockets[users[i]]) {
+                for (let i = 0; i < usersArray.length; i++) {
+                    if (!userSockets[usersArray[i]]) {
                         return callback({ error: `User ${users[i]} is not online` });
                     }
                 }
-                users.push(socket.username); // add the user to the group chat
-                const room = users.sort().join('-');
-                users.forEach(user => {if (user !== socket.username) io.to(userSockets[user]).emit('join-groupchat', room, {key: users[user]})}); // tell the users to join the group chat
-                callback(room); // response ok to the client
+                usersArray.push(socket.username); // add the user to the group chat
+                const room = usersArray.sort().join('-');
+                usersArray.forEach(user => {if (user !== socket.username) io.to(userSockets[user]).emit('join-groupchat', room, {key: users[user]})}); // tell the users to join the group chat
+                callback(room);
             });
             socket.on('join-groupchat', async (room, callback) => { // we are not sending back the key because the client should already have it, if not that's on them and the gc will need to be recreated (this is on purpose for security)
                 const users = room.split('-'); // get the users in the group chat
                 if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
                 socket.join(room); // actually join the socket room
-                callback(room); // response ok to the client
+                callback(room); // FIXME - callback is not a function
             });
             let typingEventCounts = new Map();
             const maxEvents = 5;
