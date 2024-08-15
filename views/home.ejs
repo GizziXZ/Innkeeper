@@ -330,10 +330,50 @@
             });
         }
 
-        function createGroupchat() {
+        async function createGroupchat() {
             const selected = document.getElementById('friends-form').querySelectorAll('input[type="checkbox"]:checked')
             const selectedFriends = Array.from(selected).map(checkbox => checkbox.value);
-            console.log(selected);
+            if (selectedFriends.length < 2) return alert('Please select at least two friend to create a groupchat with'); // we are checking for atleast 2 friends anyways on the server side but its good to do this here too to save resources
+            // for every friend, we will be getting their public keys, encrypting the symmetric key with their public key and sending it to them through the server. this is probably very resource intensive but it's the only secure way to do it
+            const symmetricKey = await subtle.exportKey('jwk', await subtle.generateKey({ // generate a symmetric key for the groupchat
+                name: 'AES-GCM',
+                length: 256,
+            }, true, ['encrypt', 'decrypt']));
+            let selectedKeys = {}; // { "user1": "key1", "user2": "key2" }
+            selectedFriends.forEach(async friend => {
+                let publicKey = await new Promise((resolve, reject) => {
+                    db.transaction(['keys'], 'readonly').objectStore('keys').get(friend).onsuccess = (event) => {
+                        if (!event.target.result) {
+                            socket.emit('request-public-key', friend, (response) => resolve(response));
+                            savePublicKey(friend, response); // save the public key in indexedDB
+                            return;
+                        }
+                        resolve(event.target.result.publicKey);
+                    };
+                });
+                publicKey = await subtle.importKey('jwk', publicKey, { // import the public key
+                    name: 'RSA-OAEP',
+                    hash: 'SHA-256',
+                }, true, ['encrypt']);
+                const encryptedKeyData = await subtle.encrypt({ // encrypt the symmetric key with the friend's public key
+                    name: 'RSA-OAEP',
+                }, JSON.parse(publicKey), new TextEncoder().encode(JSON.stringify(symmetricKey))); // REVIEW - hopefully i don't need to parse the public key twice??
+                selectedKeys[friend] = encryptedKeyData;
+            });
+            socket.emit('create-groupchat', (selectedKeys), (response) => {
+                if (response.error) return alert(response.error);
+                document.getElementById('dropdown-content').style.display = 'none'; // close back the dropdown
+                if (response.ok) {
+                    // save the groupchat in indexedDB first
+                    const transaction = db.transaction(['keys'], 'readwrite');
+                    const store = transaction.objectStore('keys');
+                    const data = {
+                        username: response.room,
+                        symmetricKey,
+                    };
+                    store.put(data);
+                }
+            });
         }
 
         function messageError(message) {

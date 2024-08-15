@@ -90,6 +90,26 @@ function initializeSocket(io) {
                     callback(message);
                 }
             });
+            socket.on('create-groupchat', async (users, callback) => { // users is an object with the user + encrypted symmetric key (encrypted using their public key)
+                if (Object.keys(users).length <= 2) return callback({ error: 'You need atleast 2 other users to create a group chat' });
+                if (io.sockets.adapter.rooms.get(users.sort().join('-'))) return callback({ error: 'Group chat already exists' }); // REVIEW this line (this might not be how you check if a room exists)
+                // Check if all users are online
+                for (let i = 0; i < Object.keys(users).length; i++) {
+                    if (!userSockets[users[i]]) {
+                        return callback({ error: `User ${users[i]} is not online` });
+                    }
+                }
+                users.push(socket.username); // add the user to the group chat
+                const room = users.sort().join('-');
+                users.forEach(user => io.to(userSockets[user]).emit('join-groupchat', {room, key: users[user]})); // tell the users to join the group chat
+                callback(room); // response ok to the client
+            });
+            socket.on('join-groupchat', async (room, callback) => {
+                const users = room.split('-'); // get the users in the group chat
+                if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
+                socket.join(room); // actually join the socket room
+                callback(room); // response ok to the client
+            });
             let typingEventCounts = new Map();
             const maxEvents = 5;
             const timeWindow = 300;
