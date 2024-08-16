@@ -64,16 +64,17 @@ function initializeSocket(io) {
                     console.error(err);
                 }
             });
-            socket.on('request-public-key', async (username) => {
+            socket.on('request-public-key', async (username, callback) => {
                 try {
                     const friend = await User.findOne({ username });
                     if (!friend.publicKey) return;
-                    if (friend.friends.includes(socket.username)) return io.to(userSockets[socket.username]).emit('public-key', { friend: username, publicKey: JSON.stringify(friend.publicKey) });
+                    if (friend.friends.includes(socket.username)) return callback({ friend: username, publicKey: JSON.stringify(friend.publicKey) });
                 } catch (err) {
                     console.error(err);
+                    callback({ error: 'An error occurred while fetching the public key' });
                 }
             });
-            socket.on('save-symmetric-key', async (encrypted, recipient) => { // NOTE - will need a callback here eventually
+            socket.on('save-symmetric-key', async (encrypted, recipient) => {
                 try {
                     const friend = await User.findOne({ username: recipient });
                     if (friend.friends.includes(socket.username)) {
@@ -87,7 +88,7 @@ function initializeSocket(io) {
                             await friend.save();
                             return;
                         }
-                        io.to(userSockets[recipient]).emit('save-symmetric-key', encrypted, socket.username);
+                        io.to(userSockets[recipient]).emit('save-symmetric-key', encrypted, socket.username); 
                     }
                 } catch (err) {
                     console.error(err);

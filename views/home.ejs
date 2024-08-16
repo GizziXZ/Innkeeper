@@ -203,7 +203,7 @@
             const encryptedKeyData = await subtle.encrypt({ // encrypt the symmetric key with the friend's public key
                 name: 'RSA-OAEP',
             }, publicKey, new TextEncoder().encode(JSON.stringify(keyData)));
-            socket.emit('save-symmetric-key', encryptedKeyData, friend); // send the symmetric key to the server
+            socket.emit('save-symmetric-key', encryptedKeyData, friend); // send the symmetric key to the server to send to the friend
             // save the symmetric key in indexedDB
             const transaction = db.transaction(['keys'], 'readwrite');
             const store = transaction.objectStore('keys');
@@ -364,8 +364,10 @@
                     request.onsuccess = (event) => {
                         if (!event.target.result) {
                             socket.emit('request-public-key', friend, (response) => {
+                                if (response.error) return alert(response.error);
                                 resolve(response);
-                                savePublicKey(friend, response); // save the public key in indexedDB
+                                const publicKey = JSON.parse(JSON.parse(response.publicKey)); // insert mandatory "WHY DO I HAVE TO PARSE THIS TWICE" comment here
+                                savePublicKey(friend, publicKey); // save the public key in indexedDB
                             });
                             return;
                         }
@@ -446,7 +448,6 @@
                     messageElement.classList.add('message');
                     const currentChat = document.getElementById('currentChat').textContent;
                     if (message.sender !== currentChat && message.recipient !== currentChat && !message.recipient.includes(currentChat)) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
-                        // FIXME - this doesn't work well with groupchats
                         saveMessage(message, message.sender); // in this case, the sender is the other user and the recipient is the current user
                         const chatlist = document.querySelector('.chat-list ul');
                         const friends = chatlist.getElementsByTagName('li');
@@ -555,12 +556,6 @@
                 store.put(data);
                 refresh();
             });
-        });
-
-        socket.on('public-key', async (data) => { // save the public key of the friend in the local storage
-            const publicKey = JSON.parse(JSON.parse(data.publicKey)); // insert mandatory "WHY DO I HAVE TO PARSE THIS TWICE" comment here
-            savePublicKey(data.friend, publicKey);
-            createSymmetricKey(data.friend, publicKey); // create a symmetric key for the chat with the friend
         });
 
         socket.on('save-symmetric-key', async (encryptedKeyData, friend) => { // save the symmetric key in indexedDB (if you were sent the symmetric key)
@@ -719,7 +714,7 @@
                 });
                 const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
-                    if (!event.target.result) { // if the user isn't in store, generate a key pair
+                    if (!event.target.result.privateKey) { // if the user isn't in store, generate a key pair
                         const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
                             name: 'RSA-OAEP',
                             modulusLength: 2048,
@@ -828,7 +823,12 @@
                     const request = store.get(friend);
                     request.onsuccess = async (event) => { // check for a saved public key for the friend and request it if it doesn't exist
                         if (!event.target.result || !event.target.result.publicKey) {
-                            socket.emit('request-public-key', friend);
+                            socket.emit('request-public-key', friend, (response) => {
+                                if (response.error) return alert(response.error);
+                                const publicKey = JSON.parse(JSON.parse(response.publicKey)); // insert mandatory "WHY DO I HAVE TO PARSE THIS TWICE" comment here
+                                savePublicKey(friend, publicKey); // save the public key in indexedDB
+                                createSymmetricKey(friend, publicKey); // create a symmetric key for the chat with the friend
+                            });
                         }
                     };
 
