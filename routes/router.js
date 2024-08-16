@@ -5,35 +5,47 @@ const config = require('../config.json');
 const router = express.Router();
 
 router.get('/', (req, res) => {
-    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) {
-        res.redirect('/home');
-    } else {
-        res.redirect('/login');
+    try {
+        if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) {
+            res.redirect('/home');
+        } else {
+            res.redirect('/login');
+        }
+    } catch (err) {
+        console.error(err);
+        res.clearCookie('token');
+        res.redirect('/login', {message: err.message});
     }
-})
+});
 
 router.get('/login', (req, res) => {
     const message = req.query.message;
     res.render('login', {message});
-})
+});
 
 router.get('/home', (req, res) => {
-    // if the token is valid then it will render the home page
-    if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home', {username: jwt.decode(req.cookies.token).username});
-    else {
+    try {
+        // if the token is valid then it will render the home page
+        if (req.cookies.token && jwt.verify(req.cookies.token, config.jwtSecret)) res.render('home', {username: jwt.decode(req.cookies.token).username});
+        else {
+            res.clearCookie('token');
+            return res.redirect('/login');
+        }
+    } catch (err) {
+        console.error(err);
         res.clearCookie('token');
-        return res.redirect('/login');
+        return res.redirect('/login', {message: err.message});
     }
-})
+});
 
 router.get('/logout', (req, res) => {
     res.clearCookie('token');
     res.redirect('/login');
-})
+});
 
 router.get('/register', (req, res) => {
     res.render('register');
-})
+});
 
 router.get('/friend-requests', async (req, res) => {
     try {
@@ -45,7 +57,7 @@ router.get('/friend-requests', async (req, res) => {
         console.error(err);
         return res.status(500);
     }
-})
+});
 
 router.get('/friends', async (req, res) => {
     try {
@@ -57,6 +69,6 @@ router.get('/friends', async (req, res) => {
         console.error(err);
         return res.status(500);
     }
-})
+});
 
 module.exports = router;

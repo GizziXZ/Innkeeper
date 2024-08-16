@@ -17,11 +17,10 @@ exports.login = async (req, res) => {
 
     try {
         const user = await User.findOne({ username })
-        
         if (user) {
             if (bcrypt.compareSync(password, user.password)) {
                 const token = jwt.sign({ username }, config.jwtSecret, { expiresIn: '4h' });
-                res.cookie('token', token, { httpOnly: false }); // making it httponly is kind of unsafe, but we need to access it from the client side to generate the private key client side
+                res.cookie('token', token, { httpOnly: false }); // httpOnly is false so that the client can access the token and use it for socket.io
                 res.redirect('/home');
             } else {
                 const Error = 'Invalid username or password';
@@ -80,7 +79,6 @@ exports.addFriend = async (req, res, io) => {
     try {
         const user = await User.findOne({ username });
         const friend = await User.findOne({ username: friendUsername });
-
         if (!user || !friend) return res.status(404).send();
         if (username === friendUsername) return res.status(400).send();
         if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
@@ -105,6 +103,7 @@ exports.addFriend = async (req, res, io) => {
         }
     } catch (err) {
         console.error(err)
+        return res.status(500).send();
     }
 }
 
@@ -115,7 +114,6 @@ exports.removeFriend = async (req, res, io) => {
     try {
         const user = await User.findOne({ username });
         const friend = await User.findOne({ username: friendUsername });
-
         user.friends = user.friends.filter(f => f !== friendUsername);
         friend.friends = friend.friends.filter(f => f !== username);
         await user.save();

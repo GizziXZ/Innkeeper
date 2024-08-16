@@ -21,7 +21,6 @@ const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik
 
 // TODO - use callbacks on sockethandler for less spaghetti code on clientside
 // TODO - home.ejs is a mess, needs to be organized
-// TODO - better error handling in everything server-side
 // TODO - possibly voice chat soon
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
@@ -40,13 +39,6 @@ app.use(cookieParser());
 app.use(express.static(__dirname + '/public'));
 app.use(require('./middleware/refreshToken.js'));
 app.use(require('./middleware/checkExpiration.js'));
-app.use((err, req, res, next) => { // error handling middleware
-    if (err) {
-        console.error(err);
-        res.status(500).send('Internal Server Error');
-    }
-    next();
-});
 
 // Routes
 const userRoutes = require('./routes/router.js');
