@@ -68,7 +68,7 @@ function initializeSocket(io) {
                 try {
                     const friend = await User.findOne({ username });
                     if (!friend.publicKey) return;
-                    if (friend.friends.includes(socket.username)) return callback({ friend: username, publicKey: JSON.stringify(friend.publicKey) });
+                    if (friend.friends.includes(socket.username) || username === socket.username) return callback({ friend: username, publicKey: JSON.stringify(friend.publicKey) });
                 } catch (err) {
                     console.error(err);
                     callback({ error: 'An error occurred while fetching the public key' });

@@ -712,9 +712,9 @@
                         closeModal();
                     }
                 });
-                const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
+                const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent; // current user
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
-                    if (!event.target.result.privateKey) { // if the user isn't in store, generate a key pair
+                    if (!event.target.result || !event.target.result.privateKey) { // if the user isn't in store, generate a key pair
                         const keyPair = await subtle.generateKey({ // generate key pair (we will need to later make checks to see if the key pair doesn't exist and generate it if it doesn't + tell the server to send the public key to the friends)
                             name: 'RSA-OAEP',
                             modulusLength: 2048,
@@ -724,7 +724,7 @@
                         userPrivateKey = keyPair.privateKey;
                         userPublicKey = keyPair.publicKey;
                         savePrivateKey(username, await subtle.exportKey('jwk', userPrivateKey));
-                        // console.log('Private key saved');
+                        console.log('Private key saved');
                         socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
                     } else { // if the user is in the store, load the key
                         db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
@@ -733,7 +733,28 @@
                                 name: 'RSA-OAEP',
                                 hash: 'SHA-256',
                             }, true, ['decrypt']);
-                            // console.log('Private key loaded');
+                            // let's check if the private key matches the server-saved public key, we'll ask the server for our own public key
+                            socket.emit('request-public-key', username, async (response) => {
+                                if (response.error) return alert(response.error);
+                                const publicKey = await subtle.importKey('jwk', JSON.parse(JSON.parse(response.publicKey)), {
+                                    name: 'RSA-OAEP',
+                                    hash: 'SHA-256',
+                                }, true, ['encrypt']);
+                                const verificationMessage = new TextEncoder().encode('This is a verification message');
+                                const encrypted = await subtle.encrypt({ // using encrypt because you can't sign with rsa-oaep
+                                    name: 'RSA-OAEP',
+                                }, publicKey, verificationMessage);
+                                await subtle.decrypt({ // using decrypt because you can't verify with rsa-oaep
+                                    name: 'RSA-OAEP',
+                                }, userPrivateKey, encrypted).catch(err => { // failed to decrypt, the private key doesn't match the public key
+                                    let store = db.transaction(['keys'], 'readwrite').objectStore('keys');
+                                    store.delete(username).onsuccess = () => { // delete the private key from the store
+                                        console.log('Private key does not match public key, regenerating key pair');
+                                        return refresh();
+                                    };
+                                });
+                            });
+                            console.log('Private key loaded');
                         }
                     }
                 }
