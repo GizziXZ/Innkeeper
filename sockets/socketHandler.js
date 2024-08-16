@@ -83,6 +83,7 @@ function initializeSocket(io) {
                 if (recipient.includes('-')) { // if the recipient is a group chat (cheap yes i know)
                     const users = recipient.split('-');
                     if (!users.includes(socket.username)) return; // check if the sender is in the group chat
+                    message.sender = socket.username;
                     io.to(recipient).emit('message', message);
                     callback(message);
                 } else {
