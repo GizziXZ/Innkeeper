@@ -41,8 +41,8 @@ exports.register = async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    if (!username.length || username.substring(0,1) === ' ' || !username.replace((/\s/g, '').length)) { // If username is empty or starts with a space or is all spaces then return error
-        const usernameError = 'Username must be atleast 1 character, not start with a space or be all spaces.'
+    if (!username.length || username.substring(0,1) === ' ' || !username.replace((/\s/g, '').length) || username.includes('-')) { // If username is empty or starts with a space or is all spaces then return error
+        const usernameError = 'Username must be atleast 1 character, not start with a space or be all spaces or include a hyphen.'
         return res.render('register', {usernameError})
     } else if (password.length < 5) { // If password is less than 5 characters then return error
         const passwordError = 'Password must be atleast 5 characters'

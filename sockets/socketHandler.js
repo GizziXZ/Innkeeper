@@ -9,8 +9,6 @@ const userSockets = {};
 async function handleUserConnection(socket, io) { // when a user connects, update their online status and tell their friends that they are online
     try {
         const user = await User.findOne({ username: socket.username });
-        user.online = true;
-        await user.save();
         const friends = user.friends;
         const onlineFriends = friends.filter(friend => userSockets[friend]);
         onlineFriends.forEach(friend => {
@@ -43,11 +41,12 @@ function initializeSocket(io) {
                 setTimeout(async () => {
                     if (userSockets[socket.username]) return;
                     const user = await User.findOne({ username: socket.username });
-                    user.online = false;
-                    await user.save();
                     const onlineFriends = user.friends.filter(friend => userSockets[friend]);
                     onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('offline', socket.username)); // tell the online friends that the user is offline
                 }, 1500);
+            });
+            socket.on('check-online', (user, callback) => {
+                callback(!!userSockets[user]);
             });
             socket.on('save-public-key', async (publicKey) => {
                 const user = await User.findOne({ username: socket.username });
@@ -81,7 +80,12 @@ function initializeSocket(io) {
                 if (!message.recipient) return;
                 if (!message.text && !message.media) return;
                 const recipient = message.recipient;
-                if (recipient) {
+                if (recipient.includes('-')) { // if the recipient is a group chat (cheap yes i know)
+                    const users = recipient.split('-');
+                    if (!users.includes(socket.username)) return; // check if the sender is in the group chat
+                    io.to(recipient).emit('message', message);
+                    callback(message);
+                } else {
                     message.sender = socket.username;
                     message.id = uuid();
                     const friend = await User.findOne({ username: recipient });
@@ -113,7 +117,7 @@ function initializeSocket(io) {
                 const users = room.split('-'); // get the users in the group chat
                 if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
                 socket.join(room); // actually join the socket room
-                callback(room); // FIXME - callback is not a function
+                callback(room);
             });
             let typingEventCounts = new Map();
             const maxEvents = 5;
@@ -128,10 +132,17 @@ function initializeSocket(io) {
                         typingEventCounts.set(sender, typingEventCounts.get(sender) + 1);
                     }
                     if (typingEventCounts.get(sender) > maxEvents) return;
-                    const friend = await User.findOne({ username: recipient });
-                    if (!friend.friends.includes(sender)) return;
-                    const room = [socket.username, recipient].sort().join('-');
-                    io.to(room).emit('typing', sender);
+                    const isGroupChat = recipient.includes('-'); // i know, this is such a cheap way lol
+                    if (isGroupChat) {
+                        const users = recipient.split('-');
+                        if (!users.includes(sender)) return; // check if the sender is in the group chat
+                        io.to(recipient).emit('typing', sender);
+                    } else {
+                        const friend = await User.findOne({ username: recipient });
+                        if (!friend.friends.includes(sender)) return;
+                        const room = [socket.username, recipient].sort().join('-');
+                        io.to(room).emit('typing', sender);
+                    }
                 }
             });
         } catch (err) {

@@ -147,9 +147,12 @@
                 const users = store.getAll();
                 users.onsuccess = (event) => {
                     const result = event.target.result;
-                    result.forEach(user => { // we're trying to get all the groupchats to join their rooms
+                    result.forEach(user => { // we're trying to get all the saved groupchats to join their rooms
                         if (user.type !== 'group') return;
-                        socket.emit('join-groupchat', user.username);
+                        socket.emit('join-groupchat', user.username, (response) => {
+                            if (response.error) return console.error(response.error);
+                            console.log('Joined groupchat:', user.username);
+                        });
                     });
                 };
                 // console.log('Database loaded successfully');
@@ -452,7 +455,7 @@
             })
         });
 
-        socket.on('join-groupchat', async (room, key) => {
+        socket.on('join-groupchat', async (room, key) => { // this is for when the user joins a groupchat while they're online
             key = key.key; // get the key from the object
             await subtle.decrypt({ // decrypt the key
                 name: 'RSA-OAEP',
@@ -463,6 +466,7 @@
                 const data = {
                     username: room,
                     symmetricKey: decrypted,
+                    type: 'group'
                 };
                 store.put(data);
                 refresh();
@@ -696,7 +700,7 @@
                         userPrivateKey = keyPair.privateKey;
                         userPublicKey = keyPair.publicKey;
                         savePrivateKey(username, await subtle.exportKey('jwk', userPrivateKey));
-                        console.log('Private key saved');
+                        // console.log('Private key saved');
                         socket.emit('save-public-key', JSON.stringify(await subtle.exportKey('jwk', userPublicKey))); // send the public key to the server
                     } else { // if the user is in the store, load the key
                         db.transaction(['keys'], 'readonly').objectStore('keys').get(username).onsuccess = async (event) => {
@@ -705,13 +709,13 @@
                                 name: 'RSA-OAEP',
                                 hash: 'SHA-256',
                             }, true, ['decrypt']);
-                            console.log('Private key loaded');
+                            // console.log('Private key loaded');
                         }
                     }
                 }
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
-                // chatlist.innerHTML = ''; // Clear existing list items
+                chatlist.innerHTML = ''; // Clear existing list items
 
                 // SECTION - list groupchats saved in indexedDB (I NEED TO MAKE THIS A FUNCTION)
                 const groupchatsTransaction = db.transaction(['keys'], 'readonly');
@@ -765,6 +769,7 @@
                             // notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
                             messageInput.focus();
                         });
+                        chatlist.appendChild(li);
                     }
                 )};
                 //!SECTION
@@ -844,6 +849,11 @@
                     });
                     chatlist.appendChild(li);
                     li.appendChild(notificationCircle);
+                    socket.emit('check-online', friend, (response) => { // check if the friend is online to show the online status
+                        if (response) {
+                            li.style.color = 'green';
+                        }
+                    });
                 });
 
                 document.addEventListener('click', (event) => { // close context menu when clicking outside of it
@@ -889,7 +899,7 @@
 
                 const friends = await response.json();
                 const friendsList = document.querySelector('#friendsModal ul');
-                friendsList.innerHTML = ''; // Clear existing list items
+                // friendsList.innerHTML = ''; // Clear existing list items
 
                 friends.forEach(friend => { // for every friend in the list, create a list item and append it to the friendsList
                     const li = document.createElement('li');                    
@@ -937,7 +947,7 @@
                 }
 
                 const friendsList = document.querySelector('#friendsModal ul');
-                friendsList.innerHTML = ''; // might not be necessary tbh
+                // friendsList.innerHTML = ''; // might not be necessary tbh
                 friends(); // refresh the friend requests
                 refresh(); // refresh the chat list
             } catch (err) {
@@ -964,7 +974,7 @@
                 localFriends = localFriends.filter(f => f !== contextMenu.friend);
                 contextMenu.style.display = 'none';
                 const chatlist = document.querySelector('.chat-list ul');
-                chatlist.innerHTML = ''; // Clear existing list items
+                // chatlist.innerHTML = ''; // Clear existing list items
                 refresh();
             } catch (err) {
                 console.error(err);

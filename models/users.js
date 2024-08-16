@@ -17,10 +17,6 @@ const UsersSchema = new mongoose.Schema({
         type: Array,
         required: false
     },
-    online: {
-        type: Boolean,
-        required: false
-    },
     createdAt: {
         type: Date,
         default: Date.now
