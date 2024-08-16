@@ -20,6 +20,8 @@ const httpsServer = https.createServer(credentials, app);
 const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik eval isn't a good idea, but it's safe here) if using localhost, use httpServer here instead of httpsServer. maxHttpBufferSize is changed to be able to send larger files (1e7 = 10MB)
 
 // TODO - use callbacks on sockethandler for less spaghetti code on clientside
+// TODO - home.ejs is a mess, needs to be organized
+// TODO - better error handling in everything server-side
 // TODO - possibly voice chat soon
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {

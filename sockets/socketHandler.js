@@ -100,25 +100,43 @@ function initializeSocket(io) {
                 }
             });
             socket.on('create-groupchat', async (users, callback) => { // users is an object with the user + encrypted symmetric key (encrypted using their public key)
-                const usersArray = Object.keys(users);
-                if (usersArray.length < 2) return callback({ error: 'You need atleast 2 other users to create a group chat' });
-                if (io.sockets.adapter.rooms.get(Object.keys(users).sort().join('-'))) return callback({ error: 'Group chat already exists' }); // REVIEW this line (this might not be how you check if a room exists)
-                // Check if all users are online
-                for (let i = 0; i < usersArray.length; i++) {
-                    if (!userSockets[usersArray[i]]) {
-                        return callback({ error: `User ${users[i]} is not online` });
+                try {
+                    const usersArray = Object.keys(users);
+                    if (usersArray.length < 2) return callback({ error: 'You need atleast 2 other users to create a group chat' });
+                    // Check if all users are online
+                    for (let i = 0; i < usersArray.length; i++) {
+                        if (!userSockets[usersArray[i]]) {
+                            return callback({ error: `User ${users[i]} is not online` });
+                        }
                     }
+                    usersArray.push(socket.username); // add the user to the group chat
+                    const room = usersArray.sort().join('-');
+                    usersArray.forEach(user => {if (user !== socket.username) io.to(userSockets[user]).emit('join-groupchat', room, {key: users[user]})}); // tell the users to join the group chat
+                    callback(room);
+                } catch (err) {
+                    console.error(err);
+                    callback({ error: 'An error occurred while creating the group chat' });
                 }
-                usersArray.push(socket.username); // add the user to the group chat
-                const room = usersArray.sort().join('-');
-                usersArray.forEach(user => {if (user !== socket.username) io.to(userSockets[user]).emit('join-groupchat', room, {key: users[user]})}); // tell the users to join the group chat
-                callback(room);
             });
             socket.on('join-groupchat', async (room, callback) => { // we are not sending back the key because the client should already have it, if not that's on them and the gc will need to be recreated (this is on purpose for security)
-                const users = room.split('-'); // get the users in the group chat
-                if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
-                socket.join(room); // actually join the socket room
-                callback(room);
+                try {
+                    const users = room.split('-'); // get the users in the group chat
+                    if (!users.includes(socket.username)) return callback({ error: 'You are not in this group chat' }); // check if the user is in the group chat
+                    socket.join(room); // actually join the socket room
+                    callback({success: 'Joined the group chat'});
+                } catch (err) {
+                    console.error(err);
+                    callback({ error: 'An error occurred while joining the group chat' });
+                }
+            });
+            socket.on('leave-groupchat', (room, callback) => {
+                try {
+                    socket.leave(room);
+                    callback({ success: 'Left the group chat' });
+                } catch (err) {
+                    console.error(err);
+                    callback({ error: 'An error occurred while leaving the group chat' });
+                }
             });
             let typingEventCounts = new Map();
             const maxEvents = 5;
@@ -148,6 +166,7 @@ function initializeSocket(io) {
             });
         } catch (err) {
             if (err instanceof jwt.TokenExpiredError) return;
+            if (err instanceof jwt.JsonWebTokenError) return;
             console.error(err);
         }
     });

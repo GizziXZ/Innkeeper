@@ -14,9 +14,14 @@
                 <ul>
                     <!-- <li>User</li> -->
                 </ul>
-                <div id="context-menu" class="context-menu">
+                <div id="friend-context-menu" class="context-menu">
                     <ul>
                         <li id="remove-friend" onclick="removeFriend()">Remove Friend</li>
+                    </ul>
+                </div>
+                <div id="group-context-menu" class="context-menu">
+                    <ul>
+                        <li id="leave-groupchat" onclick="leaveGroupchat()">Leave Groupchat</li>
                     </ul>
                 </div>
             </div>
@@ -151,7 +156,7 @@
                         if (user.type !== 'group') return;
                         socket.emit('join-groupchat', user.username, (response) => {
                             if (response.error) return console.error(response.error);
-                            console.log('Joined groupchat:', user.username);
+                            if (response.success) console.log('Joined groupchat:', user.username);
                         });
                     });
                 };
@@ -439,13 +444,24 @@
                     message.date = new Date();
                     const messageElement = document.createElement('div');
                     messageElement.classList.add('message');
-                    if (message.sender !== document.getElementById('currentChat').textContent && message.recipient !== document.getElementById('currentChat').textContent) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
+                    const currentChat = document.getElementById('currentChat').textContent;
+                    if (message.sender !== currentChat && message.recipient !== currentChat && !message.recipient.includes(currentChat)) { // if the message isn't from the current chat, don't show it but save it locally and add a notification circle
                         // FIXME - this doesn't work well with groupchats
                         saveMessage(message, message.sender); // in this case, the sender is the other user and the recipient is the current user
                         const chatlist = document.querySelector('.chat-list ul');
                         const friends = chatlist.getElementsByTagName('li');
                         for (let i = 0; i < friends.length; i++) {
                             if (friends[i].textContent === message.sender) {
+                                friends[i].getElementsByClassName('message-notification-circle')[0].style.visibility = 'visible';
+                            }
+                        }
+                        return;
+                    } else if (message.recipient.includes('-') && message.recipient !== currentChat && message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) {
+                        saveMessage(message, message.recipient); // in this case, the recipient = groupchat and the sender = the user who sent the message
+                        const chatlist = document.querySelector('.chat-list ul');
+                        const friends = chatlist.getElementsByTagName('li');
+                        for (let i = 0; i < friends.length; i++) {
+                            if (friends[i].textContent === message.recipient) {
                                 friends[i].getElementsByClassName('message-notification-circle')[0].style.visibility = 'visible';
                             }
                         }
@@ -781,7 +797,16 @@
                             notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
                             messageInput.focus();
                         });
+                        li.addEventListener('contextmenu', (event) => { // right click to open context menu
+                            event.preventDefault();
+                            const contextMenu = document.getElementById('group-context-menu');
+                            contextMenu.style.display = 'block';
+                            contextMenu.style.left = event.clientX + 'px';
+                            contextMenu.style.top = event.clientY + 'px';
+                            contextMenu.group = groupchat.username; // groupchat.username is the name of the groupchat
+                        });
                         chatlist.appendChild(li);
+                        li.appendChild(notificationCircle);
                     }
                 )};
                 //!SECTION
@@ -853,7 +878,7 @@
                     });
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();
-                        const contextMenu = document.getElementById('context-menu');
+                        const contextMenu = document.getElementById('friend-context-menu');
                         contextMenu.style.display = 'block';
                         contextMenu.style.left = event.clientX + 'px';
                         contextMenu.style.top = event.clientY + 'px';
@@ -869,7 +894,7 @@
                 });
 
                 document.addEventListener('click', (event) => { // close context menu when clicking outside of it
-                    const contextMenu = document.getElementById('context-menu');
+                    const contextMenu = document.getElementById('friend-context-menu');
                     if (event.target !== contextMenu && !contextMenu.contains(event.target)) {
                         contextMenu.style.display = 'none';
                     }
@@ -967,9 +992,9 @@
             }
         }
 
-        async function removeFriend(friend) {
+        async function removeFriend() {
             try {
-                const contextMenu = document.getElementById('context-menu');
+                const contextMenu = document.getElementById('friend-context-menu');
                 const response = await fetch('/remove-friend', {
                     method: 'POST',
                     credentials: "include",
@@ -991,7 +1016,28 @@
             } catch (err) {
                 console.error(err);
             }
-            
+        }
+
+        function leaveGroupchat() { // should i be using socketio or http requests for this? i don't know
+            try {
+                const contextMenu = document.getElementById('group-context-menu');
+                const groupName = contextMenu.group;
+                // Emit the leave-groupchat event to the server
+                socket.emit('leave-groupchat', groupName, (response) => {
+                    contextMenu.style.display = 'none';
+                    if (response.error) return alert(response.error);
+                    const chatlist = document.querySelector('.chat-list ul');
+                    // chatlist.innerHTML = ''; // Clear existing list items
+                    if (response.success) {
+                        const transaction = db.transaction(['keys'], 'readwrite');
+                        const store = transaction.objectStore('keys');
+                        store.delete(groupName);
+                        refresh();
+                    }
+                });
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         function addUser() { // used to display the add friend modal
