@@ -48,6 +48,7 @@
                             <button onclick="createGroupchat()">Create</button>
                         </div>
                     </div>
+                    <button onclick="settings()">Settings</button>
                     <button onclick="window.location.href='/logout'">Logout</button>
                 </div>
             </header>
@@ -81,6 +82,22 @@
     </div>
 
     <!-- Modals -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Settings</h2>
+            <h3>
+                Auto-delete messages after: <select id="autoDeleteMessages" onchange="saveOptions()" class="option">
+                <option value="never">Never</option>
+                <option value="1h">1 hour</option>
+                <option value="6h">6 hours</option>
+                <option value="12h">12 hours</option>
+                <option value="1d">1 day</option>
+                <option value="1w">1 week</option></select>
+            </h3>
+        </div>
+    </div>
+
     <div id="addUserModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
@@ -979,6 +996,44 @@
                 refresh();
             } catch (err) {
                 console.error(err);
+            }
+        }
+
+        function settings() {
+            try {
+                const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                store.get(username).onsuccess = async (event) => {
+                    document.getElementById('settingsModal').style.display = 'block';
+                    const settings = event.target.result.settings || {};
+
+                    if (settings.autoDeleteMessages) {
+                        document.getElementById('autoDeleteMessages').value = settings.autoDeleteMessages;
+                    } else {
+                        document.getElementById('autoDeleteMessages').value = 'never';
+                    }
+                }
+            } catch(err) {
+                console.error('Failed to fetch settings:', err);
+            }
+        }
+
+        function saveOptions() {
+            try {
+                const options = document.getElementsByClassName('option');
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
+                    const settings = event.target.result.settings || {};
+                    for (let i = 0; i < options.length; i++) {
+                        settings[options[i].id] = options[i].value;
+                    }
+                    console.log(settings)
+                    store.put(settings);
+                }
+            } catch(err) {
+                console.error('Failed to save settings:', err);
             }
         }
 
