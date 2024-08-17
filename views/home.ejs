@@ -191,6 +191,7 @@
         async function init() {
             try {
                 db = await openDatabase();
+                checkExpiredMessages(); // check for expired messages on initialization
                 const transaction = db.transaction(['keys'], 'readonly');
                 const store = transaction.objectStore('keys');
                 const users = store.getAll();
@@ -646,6 +647,56 @@
             };
         }
 
+        function parseExpirationPeriod(period) {
+            const unit = period.slice(-1);
+            const value = parseInt(period.slice(0, -1), 10);
+
+            switch (unit) {
+                case 'h':
+                    return value * 60 * 60 * 1000; // hours to milliseconds
+                case 'd':
+                    return value * 24 * 60 * 60 * 1000; // days to milliseconds
+                case 'w':
+                    return value * 7 * 24 * 60 * 60 * 1000; // weeks to milliseconds
+                case 'm':
+                    return value * 60 * 1000; // minutes to milliseconds
+                default:
+                    return 0; // default to 0 if the unit is not recognized
+            }
+        }
+
+        function checkExpiredMessages() {
+            db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = (event) => {
+                if (!event.target.result) return;
+                const expirationPeriod = event.target.result.settings.autoDeleteMessages;
+                if (expirationPeriod === 'never') return; // if the expiration period is set to never, don't do anything
+                const expirationTime = parseExpirationPeriod(expirationPeriod);
+                const now = Date.now();
+
+                const transaction = db.transaction(['messages'], 'readwrite');
+                const store = transaction.objectStore('messages');
+                const request = store.getAll();
+
+                request.onsuccess = (event) => {
+                    const messageKeys = event.target.result;
+                    messageKeys.forEach(messageKey => {
+                        const filteredMessages = messageKey.messages.filter(message => now - message.date <= expirationTime);
+                        if (filteredMessages.length !== messageKey.messages.length) {
+                            messageKey.messages = filteredMessages;
+                            store.put(messageKey);
+                        }
+                    });
+                };
+
+                request.onerror = (event) => {
+                    console.error('Failed to check expired messages:', event.target.errorCode);
+                };
+            }
+        }
+
+        // interval to check every once in a while if any messages are expired and delete them (this might not be the best way to do it but if there's a better way let me know lol)
+        setInterval(checkExpiredMessages, 30 * 60 * 1000); // 30 * 60 * 1000 = 30 minutes
+
         async function sendMessage() {
             let messageText = messageInput.value;
             if (messageText) {
@@ -1001,10 +1052,9 @@
 
         function settings() {
             try {
-                const username = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
                 const transaction = db.transaction(['keys'], 'readwrite');
                 const store = transaction.objectStore('keys');
-                store.get(username).onsuccess = async (event) => {
+                store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
                     document.getElementById('settingsModal').style.display = 'block';
                     const settings = event.target.result.settings || {};
 
@@ -1029,8 +1079,8 @@
                     for (let i = 0; i < options.length; i++) {
                         settings[options[i].id] = options[i].value;
                     }
-                    console.log(settings)
-                    store.put(settings);
+                    event.target.result.settings = settings;
+                    store.put(event.target.result); // if only store.add() would just work instead of doing put
                 }
             } catch(err) {
                 console.error('Failed to save settings:', err);
