@@ -118,6 +118,21 @@
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
 
+        document.getElementsByClassName('messages')[0].addEventListener('click', () => { // focus on the chat input when clicking in the messages, for convenience
+            messageInput.focus();
+        });
+
+        messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        messageInput.addEventListener('input', () => { // send typing event to server
+            socket.emit('typing', document.getElementById('currentChat').textContent);
+        });
+
+        // SECTION - initialization functions
         function openDatabase() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open('innkeeper', 1);
@@ -165,6 +180,133 @@
                 console.error('Failed to load the database:', error);
             }
         }
+        //!SECTION
+        
+        // SECTION - socket.io event listeners
+        socket.on('connect', () => {
+            socket.emit('pending-key', (keys) => { // on connection, get the pending keys from the server
+                keys.forEach(async keyObject => {
+                    const friend = Object.keys(keyObject)[0];
+                    let key = keyObject[friend];
+                    key = new Uint8Array(atob(key).split('').map(c => c.charCodeAt(0))); // decoded key
+                    key = await subtle.decrypt({ // decrypt the key
+                        name: 'RSA-OAEP',
+                    }, userPrivateKey, key)
+                    const transaction = db.transaction(['keys'], 'readwrite');
+                    const store = transaction.objectStore('keys');
+                    const data = {
+                        username: friend,
+                        symmetricKey: JSON.parse(new TextDecoder().decode(key)),
+                    };
+                    store.get(friend).onsuccess = (event) => {
+                        if (!event.target.result) return store.put(data);
+                        if (event.target.result) {
+                            data.publicKey = event.target.result.publicKey;
+                        }
+                        store.put(data);
+                    };
+                })
+            });
+        });
+
+        socket.on('join-groupchat', async (room, key) => { // this is for when the user joins a groupchat while they're online
+            key = key.key; // get the key from the object
+            await subtle.decrypt({ // decrypt the key
+                name: 'RSA-OAEP',
+            }, userPrivateKey, key).then(decrypted => {
+                decrypted = JSON.parse(new TextDecoder().decode(decrypted));
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                const data = {
+                    username: room,
+                    symmetricKey: decrypted,
+                    type: 'group'
+                };
+                store.put(data);
+                refresh();
+            });
+        });
+
+        socket.on('save-symmetric-key', async (encryptedKeyData, friend) => { // save the symmetric key in indexedDB (if you were sent the symmetric key)
+            const symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
+                name: 'RSA-OAEP',
+            }, userPrivateKey, encryptedKeyData).then(async decrypted => {
+                decrypted = new TextDecoder().decode(decrypted);
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                const data = {
+                    username: friend, // the username of the user that the messages are for
+                    symmetricKey: JSON.parse(decrypted),
+                };
+                store.get(friend).onsuccess = (event) => {
+                    if (!event.target.result) return store.put(data);
+                    if (event.target.result) {
+                        data.publicKey = event.target.result.publicKey;
+                    }
+                    store.put(data);
+                };
+            });
+        })
+
+        socket.on('message', async (message) => { // receive message from server
+            if (message.recipient.includes('-')) { // if the recipient is a groupchat
+                message = await receiveMessage(message, message.recipient);
+                if (!message) return; // because of some fuckery going on inside the receiveMessage function where it returns if current user and rgajoajgoejgvroaejvavaorkpak
+                saveMessage(message, message.recipient);
+            } else {
+                message = await receiveMessage(message, message.sender);
+                saveMessage(message, message.sender);
+            }
+        });
+
+        let typingTimeout;
+        socket.on('typing', (sender) => {
+            if (sender !== document.getElementById('currentChat').textContent) return; // only show typing indicator if the sender is the current chat
+            const typingIndicator = document.getElementById('typingIndicator');
+            typingIndicator.innerText = `${sender} is typing...`;
+            typingIndicator.style.display = 'block';
+
+            // Clear any existing timeout to avoid flickering
+            if (typingTimeout) {
+                clearTimeout(typingTimeout);
+            }
+
+            // Hide the typing indicator after a few seconds
+            typingTimeout = setTimeout(() => {
+                typingIndicator.style.display = 'none';
+            }, 2000);
+        });
+
+        socket.on('friend-request', () => { // show notification when friend request is received
+            const notificationCircle = document.querySelector('.notification-circle');
+            notificationCircle.style.display = 'block';
+        });
+
+        socket.on('refresh', () => { // refresh the chat list when a friend is removed or a request is accepted
+            refresh();
+        });
+
+        socket.on('online', async (friend) => { // show online status when a friend is online
+            if (refreshPromise) await refreshPromise;
+            const chatlist = document.querySelector('.chat-list ul');
+            const friends = chatlist.getElementsByTagName('li');
+            for (let i = 0; i < friends.length; i++) {
+                if (friends[i].textContent === friend) {
+                    friends[i].style.color = 'green';
+                }
+            }
+        });
+
+        socket.on('offline', (friend) => { // show offline status when a friend is offline
+            const chatlist = document.querySelector('.chat-list ul');
+            const friends = chatlist.getElementsByTagName('li');
+            for (let i = 0; i < friends.length; i++) {
+                if (friends[i].textContent === friend) {
+                    friends[i].style.color = 'white';
+                }
+            }
+        });
+        //!SECTION
 
         function savePrivateKey(username, privateKey) {
             const transaction = db.transaction(['keys'], 'readwrite');
@@ -315,37 +457,6 @@
             reader.readAsDataURL(file);
             event.target.value = ''; // resetting the input value so the same file can be uploaded again
             return;
-        }
-
-        function toggleDropdown() {
-            var dropdownContent = document.getElementById("dropdown-content");
-            if (dropdownContent.style.display === "none") {
-                dropdownContent.style.display = "flex";
-                populateDropdown();
-            } else {
-                dropdownContent.style.display = "none";
-            }
-        }
-
-        function populateDropdown() {
-            let form = document.getElementById("friends-form");
-            form.innerHTML = '';
-
-            localFriends.forEach(friend => {
-                let checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.name = friend;
-                checkbox.value = friend;
-                checkbox.id = friend;
-
-                let label = document.createElement('label');
-                label.htmlFor = friend;
-                label.appendChild(document.createTextNode(friend));
-
-                form.appendChild(checkbox);
-                form.appendChild(label);
-                form.appendChild(document.createElement('br'));
-            });
         }
 
         async function createGroupchat() {
@@ -506,142 +617,6 @@
             };
         }
 
-        messageInput.addEventListener('keypress', (event) => { // send message when enter is pressed
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-        messageInput.addEventListener('input', () => { // send typing event to server
-            socket.emit('typing', document.getElementById('currentChat').textContent);
-        });
-
-        socket.emit('pending-key', (keys) => { // this should happen on connecting, it will send all the pending keys for the client to manage
-            keys.forEach(async keyObject => {
-                const friend = Object.keys(keyObject)[0];
-                let key = keyObject[friend];
-                key = new Uint8Array(atob(key).split('').map(c => c.charCodeAt(0))); // decoded key
-                key = await subtle.decrypt({ // decrypt the key
-                    name: 'RSA-OAEP',
-                }, userPrivateKey, key)
-                const transaction = db.transaction(['keys'], 'readwrite');
-                const store = transaction.objectStore('keys');
-                const data = {
-                    username: friend,
-                    symmetricKey: JSON.parse(new TextDecoder().decode(key)),
-                };
-                store.get(friend).onsuccess = (event) => {
-                    if (!event.target.result) return store.put(data);
-                    if (event.target.result) {
-                        data.publicKey = event.target.result.publicKey;
-                    }
-                    store.put(data);
-                };
-            })
-        });
-
-        socket.on('join-groupchat', async (room, key) => { // this is for when the user joins a groupchat while they're online
-            key = key.key; // get the key from the object
-            await subtle.decrypt({ // decrypt the key
-                name: 'RSA-OAEP',
-            }, userPrivateKey, key).then(decrypted => {
-                decrypted = JSON.parse(new TextDecoder().decode(decrypted));
-                const transaction = db.transaction(['keys'], 'readwrite');
-                const store = transaction.objectStore('keys');
-                const data = {
-                    username: room,
-                    symmetricKey: decrypted,
-                    type: 'group'
-                };
-                store.put(data);
-                refresh();
-            });
-        });
-
-        socket.on('save-symmetric-key', async (encryptedKeyData, friend) => { // save the symmetric key in indexedDB (if you were sent the symmetric key)
-            const symmetricKey = await subtle.decrypt({ // decrypt the symmetric key
-                name: 'RSA-OAEP',
-            }, userPrivateKey, encryptedKeyData).then(async decrypted => {
-                decrypted = new TextDecoder().decode(decrypted);
-                const transaction = db.transaction(['keys'], 'readwrite');
-                const store = transaction.objectStore('keys');
-                const data = {
-                    username: friend, // the username of the user that the messages are for
-                    symmetricKey: JSON.parse(decrypted),
-                };
-                store.get(friend).onsuccess = (event) => {
-                    if (!event.target.result) return store.put(data);
-                    if (event.target.result) {
-                        data.publicKey = event.target.result.publicKey;
-                    }
-                    store.put(data);
-                };
-            });
-        })
-
-        socket.on('message', async (message) => { // receive message from server
-            if (message.recipient.includes('-')) { // if the recipient is a groupchat
-                message = await receiveMessage(message, message.recipient);
-                if (!message) return; // because of some fuckery going on inside the receiveMessage function where it returns if current user and rgajoajgoejgvroaejvavaorkpak
-                saveMessage(message, message.recipient);
-            } else {
-                message = await receiveMessage(message, message.sender);
-                saveMessage(message, message.sender);
-            }
-        });
-
-        let typingTimeout;
-        socket.on('typing', (sender) => {
-            if (sender !== document.getElementById('currentChat').textContent) return; // only show typing indicator if the sender is the current chat
-            const typingIndicator = document.getElementById('typingIndicator');
-            typingIndicator.innerText = `${sender} is typing...`;
-            typingIndicator.style.display = 'block';
-
-            // Clear any existing timeout to avoid flickering
-            if (typingTimeout) {
-                clearTimeout(typingTimeout);
-            }
-
-            // Hide the typing indicator after a few seconds
-            typingTimeout = setTimeout(() => {
-                typingIndicator.style.display = 'none';
-            }, 2000);
-        });
-
-        socket.on('friend-request', () => { // show notification when friend request is received
-            const notificationCircle = document.querySelector('.notification-circle');
-            notificationCircle.style.display = 'block';
-        });
-
-        socket.on('refresh', () => { // refresh the chat list when a friend is removed or a request is accepted
-            refresh();
-        });
-
-        socket.on('online', async (friend) => { // show online status when a friend is online
-            if (refreshPromise) await refreshPromise;
-            const chatlist = document.querySelector('.chat-list ul');
-            const friends = chatlist.getElementsByTagName('li');
-            for (let i = 0; i < friends.length; i++) {
-                if (friends[i].textContent === friend) {
-                    friends[i].style.color = 'green';
-                }
-            }
-        });
-
-        socket.on('offline', (friend) => { // show offline status when a friend is offline
-            const chatlist = document.querySelector('.chat-list ul');
-            const friends = chatlist.getElementsByTagName('li');
-            for (let i = 0; i < friends.length; i++) {
-                if (friends[i].textContent === friend) {
-                    friends[i].style.color = 'white';
-                }
-            }
-        });
-
-        document.getElementsByClassName('messages')[0].addEventListener('click', () => { // focus on the chat input when clicking in the messages, for convenience
-            messageInput.focus();
-        })
-
         async function sendMessage() {
             let messageText = messageInput.value;
             if (messageText) {
@@ -691,6 +666,54 @@
                     });
                 }
             }
+        }
+
+        function listChat(name) {
+            const li = document.createElement('li');
+            const notificationCircle = document.createElement('span');
+            notificationCircle.classList.add('message-notification-circle');
+            notificationCircle.style.visibility = 'hidden';
+            li.textContent = name;
+            li.addEventListener('click', async () => { // switch the chat to the selected friend
+                messageInput.removeAttribute('disabled'); // enable the message input field
+                document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
+                document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
+                document.getElementById('create-gc').style.display = 'block'; // show the create groupchat button
+                currentChat.textContent = name;
+                messagesContainer.innerHTML = ''; // Clear existing messages
+                const messagesTransaction = db.transaction(['messages'], 'readonly');
+                const messagesStore = messagesTransaction.objectStore('messages');
+                const messagesRequest = messagesStore.get(name);
+
+                messagesRequest.onsuccess = (event) => { // after the messages are grabbed from storage, display them
+                    if (!event.target.result) return;
+                    const messages = event.target.result.messages || [];
+                    messages.forEach(message => {
+                        if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
+                        const messageElement = document.createElement('div');
+                        messageElement.classList.add('message');
+                        messageElement.innerHTML = getMessageHTML(message);;
+                        messagesContainer.appendChild(messageElement);
+                        if (message.media) {
+                            const imgElement = messageElement.querySelector('img');
+                            if (imgElement) {
+                                imgElement.addEventListener('load', () => {
+                                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                });
+                            }
+                            const videoElement = messageElement.querySelector('video');
+                            if (videoElement) {
+                                videoElement.addEventListener('loadedmetadata', () => {
+                                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                });
+                            }
+                        } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
+                    });
+                };
+                notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
+                messageInput.focus();
+            });
+            return {li, notificationCircle};
         }
 
         async function refresh() {
@@ -761,8 +784,6 @@
                 const chatlist = document.querySelector('.chat-list ul');
                 const currentChat = document.getElementById('currentChat');
                 chatlist.innerHTML = ''; // Clear existing list items
-
-                // SECTION - list groupchats saved in indexedDB (I NEED TO MAKE THIS A FUNCTION)
                 const groupchatsTransaction = db.transaction(['keys'], 'readonly');
                 const groupchatsStore = groupchatsTransaction.objectStore('keys');
                 const groupchatsRequest = groupchatsStore.getAll();
@@ -770,49 +791,7 @@
                     const groupchats = event.target.result;
                     groupchats.forEach(groupchat => {
                         if (groupchat.type !== 'group') return;
-                        const li = document.createElement('li');
-                        const notificationCircle = document.createElement('span');
-                        notificationCircle.classList.add('message-notification-circle');
-                        notificationCircle.style.visibility = 'hidden';
-                        li.textContent = groupchat.username;
-                        li.addEventListener('click', async () => { // switch the chat to the selected groupchat
-                            messageInput.removeAttribute('disabled'); // enable the message input field
-                            document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
-                            document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
-                            document.getElementById('create-gc').style.display = 'none'; // hide the create groupchat button
-                            currentChat.textContent = groupchat.username;
-                            messagesContainer.innerHTML = ''; // Clear existing messages
-                            const messagesTransaction = db.transaction(['messages'], 'readonly');
-                            const messagesStore = messagesTransaction.objectStore('messages');
-                            const messagesRequest = messagesStore.get(groupchat.username);
-
-                            messagesRequest.onsuccess = (event) => { // after the messages are grabbed from storage, display them
-                                if (!event.target.result) return;
-                                const messages = event.target.result.messages || [];
-                                messages.forEach(message => {
-                                    const messageElement = document.createElement('div');
-                                    messageElement.classList.add('message');
-                                    messageElement.innerHTML = getMessageHTML(message); // get the default HTML for a message
-                                    messagesContainer.appendChild(messageElement);
-                                    if (message.media) {
-                                        const imgElement = messageElement.querySelector('img');
-                                        if (imgElement) {
-                                            imgElement.addEventListener('load', () => {
-                                                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                                            });
-                                        }
-                                        const videoElement = messageElement.querySelector('video');
-                                        if (videoElement) {
-                                            videoElement.addEventListener('loadedmetadata', () => {
-                                                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                                            });
-                                        }
-                                    } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                                });
-                            };
-                            notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
-                            messageInput.focus();
-                        });
+                        const {li, notificationCircle} = listChat(groupchat.username);
                         li.addEventListener('contextmenu', (event) => { // right click to open context menu
                             event.preventDefault();
                             const contextMenu = document.getElementById('group-context-menu');
@@ -825,7 +804,6 @@
                         li.appendChild(notificationCircle);
                     }
                 )};
-                //!SECTION
 
                 let response = await fetch('/friends', { // Fetch the list of friends from the server
                     method: 'GET',
@@ -852,51 +830,7 @@
                             });
                         }
                     };
-
-                    const li = document.createElement('li');
-                    const notificationCircle = document.createElement('span');
-                    notificationCircle.classList.add('message-notification-circle');
-                    notificationCircle.style.visibility = 'hidden';
-                    li.textContent = friend;
-                    li.addEventListener('click', async () => { // switch the chat to the selected friend
-                        messageInput.removeAttribute('disabled'); // enable the message input field
-                        document.getElementById('upload').removeAttribute('disabled'); // enable the upload button
-                        document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
-                        document.getElementById('create-gc').style.display = 'block'; // show the create groupchat button
-                        currentChat.textContent = friend;
-                        messagesContainer.innerHTML = ''; // Clear existing messages
-                        const messagesTransaction = db.transaction(['messages'], 'readonly');
-                        const messagesStore = messagesTransaction.objectStore('messages');
-                        const messagesRequest = messagesStore.get(friend);
-
-                        messagesRequest.onsuccess = (event) => { // after the messages are grabbed from storage, display them
-                            if (!event.target.result) return;
-                            const messages = event.target.result.messages || [];
-                            messages.forEach(message => {
-                                if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
-                                const messageElement = document.createElement('div');
-                                messageElement.classList.add('message');
-                                messageElement.innerHTML = getMessageHTML(message);;
-                                messagesContainer.appendChild(messageElement);
-                                if (message.media) {
-                                    const imgElement = messageElement.querySelector('img');
-                                    if (imgElement) {
-                                        imgElement.addEventListener('load', () => {
-                                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                                        });
-                                    }
-                                    const videoElement = messageElement.querySelector('video');
-                                    if (videoElement) {
-                                        videoElement.addEventListener('loadedmetadata', () => {
-                                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                                        });
-                                    }
-                                } else messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
-                            });
-                        };
-                        notificationCircle.style.visibility = 'hidden'; // hide the notification circle when the chat is opened
-                        messageInput.focus();
-                    });
+                    const {li, notificationCircle} = listChat(friend);
                     li.addEventListener('contextmenu', (event) => { // right click to open context menu
                         event.preventDefault();
                         const contextMenu = document.getElementById('friend-context-menu');
@@ -908,12 +842,11 @@
                     chatlist.appendChild(li);
                     li.appendChild(notificationCircle);
                     socket.emit('check-online', friend, (response) => { // check if the friend is online to show the online status
-                        if (response) {
+                        if (response) { // response = true if the friend is online
                             li.style.color = 'green';
                         }
                     });
                 });
-
                 document.addEventListener('click', (event) => { // close context menu when clicking outside of it
                     const contextMenu = document.getElementById('friend-context-menu');
                     if (event.target !== contextMenu && !contextMenu.contains(event.target)) {
@@ -956,10 +889,9 @@
                 }
 
                 const friends = await response.json();
-                const friendsList = document.querySelector('#friendsModal ul');
-                // friendsList.innerHTML = ''; // Clear existing list items
+                const friendRequestsList = document.querySelector('#friendsModal ul');
 
-                friends.forEach(friend => { // for every friend in the list, create a list item and append it to the friendsList
+                friends.forEach(friend => { // for every friend in the list, create a list item and append it to the friendRequestsList
                     const li = document.createElement('li');                    
                     li.textContent = friend;
 
@@ -975,13 +907,13 @@
                     
                     li.appendChild(acceptButton);
                     li.appendChild(rejectButton);
-                    friendsList.appendChild(li);
+                    friendRequestsList.appendChild(li);
                 });
 
                 if (friends.length === 0) { // if there are no friend requests, display a message
                     const li = document.createElement('li');
                     li.textContent = 'No friend requests';
-                    friendsList.appendChild(li);
+                    friendRequestsList.appendChild(li);
                     document.querySelector('.notification-circle').style.display = 'none'; // hide the notification circle
                 }
             } catch (err) {
@@ -1004,8 +936,7 @@
                     throw new Error('Failed to handle friend request');
                 }
 
-                const friendsList = document.querySelector('#friendsModal ul');
-                // friendsList.innerHTML = ''; // might not be necessary tbh
+                const friendRequestsList = document.querySelector('#friendsModal ul');
                 friends(); // refresh the friend requests
                 refresh(); // refresh the chat list
             } catch (err) {
@@ -1032,14 +963,13 @@
                 localFriends = localFriends.filter(f => f !== contextMenu.friend);
                 contextMenu.style.display = 'none';
                 const chatlist = document.querySelector('.chat-list ul');
-                // chatlist.innerHTML = ''; // Clear existing list items
                 refresh();
             } catch (err) {
                 console.error(err);
             }
         }
 
-        function leaveGroupchat() { // should i be using socketio or http requests for this? i don't know
+        function leaveGroupchat() { // NOTE - convert to http later
             try {
                 const contextMenu = document.getElementById('group-context-menu');
                 const groupName = contextMenu.group;
@@ -1048,7 +978,6 @@
                     contextMenu.style.display = 'none';
                     if (response.error) return alert(response.error);
                     const chatlist = document.querySelector('.chat-list ul');
-                    // chatlist.innerHTML = ''; // Clear existing list items
                     if (response.success) {
                         const transaction = db.transaction(['keys'], 'readwrite');
                         const store = transaction.objectStore('keys');
@@ -1059,6 +988,37 @@
             } catch (err) {
                 console.error(err);
             }
+        }
+        
+        function toggleDropdown() {
+            var dropdownContent = document.getElementById("dropdown-content");
+            if (dropdownContent.style.display === "none") {
+                dropdownContent.style.display = "flex";
+                populateDropdown();
+            } else {
+                dropdownContent.style.display = "none";
+            }
+        }
+
+        function populateDropdown() {
+            let form = document.getElementById("friends-form");
+            form.innerHTML = '';
+
+            localFriends.forEach(friend => {
+                let checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = friend;
+                checkbox.value = friend;
+                checkbox.id = friend;
+
+                let label = document.createElement('label');
+                label.htmlFor = friend;
+                label.appendChild(document.createTextNode(friend));
+
+                form.appendChild(checkbox);
+                form.appendChild(label);
+                form.appendChild(document.createElement('br'));
+            });
         }
 
         function addUser() { // used to display the add friend modal
