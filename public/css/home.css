@@ -67,6 +67,11 @@ body {
     background-color: #202225;
 }
 
+.user-actions h4:hover {
+    cursor: pointer;
+    text-shadow: 0 0 4px #ffffff;
+}
+
 .chat-list {
     padding: 10px;
     flex-grow: 1;
@@ -106,7 +111,7 @@ header {
     padding: 10px;
     border-bottom: 1px solid #202225;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
 }
 
@@ -115,11 +120,20 @@ header h1 {
     font-family: monospace;
     font-size: 1.5em;
     color: #fff;
+    margin-right: 10px;
+}
+
+header p {
+    margin: 0;
+    font-family: monospace;
+    font-size: 1em;
+    color: #b9bbbe;
 }
 
 .header-buttons {
     display: flex;
     gap: 10px;
+    margin-left: auto;
 }
 
 .header-buttons button {
@@ -411,7 +425,7 @@ footer input:focus {
     opacity: 0.8;
 }
 
-#usernameInput {
+.modal input {
     padding: 8px;
     border: none;
     border-radius: 5px;

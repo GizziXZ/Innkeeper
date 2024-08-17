@@ -27,7 +27,7 @@
                 </div>
             </div>
             <div class="user-actions">
-                <h4><%=username%></h4>
+                <h4 onclick="Profile()"><%=username%></h4>
                 <button class="friends-button" onclick="friends()">Friend Requests <span class="notification-circle"></span></button>
                 <button class="add-user-button" onclick="addUser()">Add User</button>
                 <button class="blocked-users-button" onclick="blockedUsers()">Blocked</button>
@@ -35,19 +35,17 @@
         </aside>
         <main class="content">
             <header>
-                <h1 id="currentChat"></h1>
+                <h1 id="currentChat"></h1><p id="status"></p>
                 <div class="header-buttons">
-                    <!-- <button onclick="window.location.href='/profile'">Profile</button> -->
                     <div class="dropdown">
                         <button id="create-gc" style="display: none;" onclick="toggleDropdown()">Create Groupchat</button>
                         <div id="dropdown-content" class="dropdown-content" style="display: none;">
                             <p>Friends:</p>
-                            <form id="friends-form">
-
-                            </form>
+                            <form id="friends-form"></form>
                             <button onclick="createGroupchat()">Create</button>
                         </div>
                     </div>
+                    <!-- <button onclick="Profile()">Profile</button> -->
                     <button onclick="settings()">Settings</button>
                     <button onclick="window.location.href='/logout'">Logout</button>
                 </div>
@@ -82,6 +80,16 @@
     </div>
 
     <!-- Modals -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Your Profile</h2>
+            <h3>
+                Set a custom status: <input type="text" id="statusInput" placeholder="Enter status" autocomplete="off" maxlength="64" onblur="saveStatus()">
+            </h3>
+        </div>
+    </div>
+
     <div id="settingsModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
@@ -128,7 +136,6 @@
     </div>
 
     <div id="mediaModal" class="modal">
-        <!-- <span class="close" onclick="closeModal()">&times;</span> -->
         <!-- <img class="media-modal" id="modalImage"> -->
     </div>
 
@@ -1048,6 +1055,31 @@
                 refresh();
             } catch (err) {
                 console.error(err);
+            }
+        }
+
+        function saveStatus() {
+            const status = document.getElementById('statusInput').value;
+            const transaction = db.transaction(['keys'], 'readwrite');
+            const store = transaction.objectStore('keys');
+            store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
+                event.target.result.status = status;
+                store.put(event.target.result);
+                socket.emit('status', status);
+            }
+        }
+
+        function Profile() {
+            try {
+                const profileModal = document.getElementById('profileModal');
+                const transaction = db.transaction(['keys'], 'readwrite');
+                const store = transaction.objectStore('keys');
+                store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
+                    profileModal.style.display = 'block';
+                    document.getElementById('statusInput').value = event.target.result.status || '';
+                }
+            } catch(err) {
+                console.error('Failed to fetch profile:', err);
             }
         }
 

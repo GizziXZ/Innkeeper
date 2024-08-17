@@ -32,6 +32,14 @@ const UsersSchema = new mongoose.Schema({
     blocked: {
         type: Array,
         required: false
+    },
+    profilePicture: {
+        type: String,
+        default: '' // i'll add a default profile picture later, wanted to do base64 of an image but it's too long to keep here
+    },
+    status: {
+        type: String,
+        required: false
     }
 });
 

@@ -11,7 +11,7 @@ most of the magic is done in your browser, key generation, encryption and decryp
 
 you type on your keyboard and it works (sometimes)
 
-for real though, once you've made an account, the password is hashed like every website with an account registration system and your account is then sent to the database. (check /models/users.js for reference to see what is stored on the database)
+for real though, once you've made an account, the password is hashed like every website with an account registration system and your account is then sent to the database. (check `/models/users.js` for reference to see what is stored on the database)
 
 once you've logged in, we use jsonwebtokens to verify your session (basically, it works like a discord token. once it's stolen someone can end up using your account as you!), and then a RSA keypair is generated using your browser. the public key is sent to the database and the private key is saved on your browser for future decryptions.
 
@@ -23,7 +23,11 @@ every message is encrypted using the shared AES symmetric key before being sent 
 
 ## What happens if I login on another browser?
 
-your keypair will be regenerated over the existing one and the public key on the server will be replaced with the new one, this is a privacy feature.
+your keypair will be regenerated over the existing one and the public key on the server will be replaced with the new one and all symmetric keys will be regenerated, this is a privacy feature.
+
+## mr headset dog, can i rely on this application for my illegal drug dealing operations
+
+absolutely not, i am literally a 16 year old and i don't know what i'm doing, it's probably extremely insecure in some way and i wouldn't be surprised if it is.
 
 
 # Setting it up

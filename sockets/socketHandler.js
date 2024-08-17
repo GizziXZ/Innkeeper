@@ -163,6 +163,19 @@ function initializeSocket(io) {
                     callback({ error: 'An error occurred while leaving the group chat' });
                 }
             });
+            socket.on('status', async (status) => {
+                try {
+                    status = status.slice(0, 64); // limit the status to 64 characters
+                    const user = await User.findOne({ username: socket.username });
+                    user.status = status;
+                    await user.save();
+                    const friends = user.friends;
+                    const onlineFriends = friends.filter(friend => userSockets[friend]);
+                    onlineFriends.forEach(friend => io.to(userSockets[friend]).emit('status-update', { user: socket.username, status }));
+                } catch (err) {
+                    console.error(err);
+                }
+            });
             let typingEventCounts = new Map();
             const maxEvents = 5;
             const timeWindow = 300;
