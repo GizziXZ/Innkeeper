@@ -84,7 +84,7 @@ exports.addFriend = async (req, res, io) => {
         if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
             friend.friendRequests.push(username);
             await friend.save();
-            io.to(userSockets[friendUsername]).emit('friend-request', username);
+            io.to(friendUsername).emit('friend-request', username);
             return res.status(200).send();
         } else if (user.friendRequests.includes(friendUsername)) { // if the friend has already sent a friend request to the user, then accept the friend request
             user.friends.push(friendUsername);
@@ -93,7 +93,7 @@ exports.addFriend = async (req, res, io) => {
             friend.friendRequests = friend.friendRequests.filter(f => f !== username);
             await user.save();
             await friend.save();
-            io.to(userSockets[friendUsername]).emit('refresh');
+            io.to(friendUsername).emit('refresh');
             return res.status(200).send();
         } else if (friend.friendRequests.includes(username)) {
             // do nothing
@@ -118,7 +118,7 @@ exports.removeFriend = async (req, res, io) => {
         friend.friends = friend.friends.filter(f => f !== username);
         await user.save();
         await friend.save();
-        io.to(userSockets[friendUsername]).emit('refresh');
+        io.to(friendUsername).emit('refresh');
         return res.status(200).send();
     } catch (err) {
         console.error(err);
@@ -140,7 +140,7 @@ exports.friendRequests = async (req, res, io) => {
             friend.friendRequests = friend.friendRequests.filter(f => f !== username); // not necessary but just to be safe
             await user.save();
             await friend.save();
-            io.to(userSockets[friendUsername]).emit('refresh');
+            io.to(friendUsername).emit('refresh');
             return res.status(200).send();
         } else { // if the user declines the friend request
             const user = await User.findOne({ username });
@@ -151,5 +151,30 @@ exports.friendRequests = async (req, res, io) => {
     } catch (err) {
         console.error(err);
         return res.status(500).send();
+    }
+}
+
+exports.blockedUsers = async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    const blockedUser = req.body.user;
+    try {
+        const user = await User.findOne({ username });
+        const blockedUsers = user.blocked || [];
+        // this works as a toggle essentially, if the user is already blocked then it will unblock them and vice versa
+        if (blockedUsers.includes(blockedUser)) {
+            user.blocked = blockedUsers.filter(b => b !== blockedUser);
+        } else {
+            user.blocked.push(blockedUser);
+            if (user.friends.includes(blockedUser)) { // if the user is friends with the blocked user, then remove them from the user's friends list
+                user.friends = user.friends.filter(f => f !== blockedUser);
+                const blockedFriend = await User.findOne({ username: blockedUser });
+                blockedFriend.friends = blockedFriend.friends.filter(f => f !== username);
+                await blockedFriend.save();
+            }
+        }
+        await user.save();
+        return res.status(200).send();
+    } catch(err) {
+        console.error(err);
     }
 }

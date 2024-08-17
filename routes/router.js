@@ -71,4 +71,16 @@ router.get('/friends', async (req, res) => {
     }
 });
 
+router.get('/blocked-users', async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    try {
+        const user = await User.findOne({ username });
+        const blocked = user.blocked || [];
+        return res.status(200).send(blocked);
+    } catch(err) {
+        console.error(err);
+        return res.status(500).send();
+    }
+});
+
 module.exports = router;

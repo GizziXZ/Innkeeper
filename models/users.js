@@ -28,6 +28,10 @@ const UsersSchema = new mongoose.Schema({
     pendingKeys: {
         type: Array,
         required: false
+    },
+    blocked: {
+        type: Array,
+        required: false
     }
 });
 

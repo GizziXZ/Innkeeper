@@ -19,7 +19,7 @@ const httpServer = http.createServer(app);
 const httpsServer = https.createServer(credentials, app);
 const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik eval isn't a good idea, but it's safe here) if using localhost, use httpServer here instead of httpsServer. maxHttpBufferSize is changed to be able to send larger files (1e7 = 10MB)
 
-// TODO - block feature
+// TODO - bug fixes and block users logic (prevent from adding you)
 // TODO - possibly voice chat soon
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
@@ -48,9 +48,10 @@ const userController = require('./controllers/userController.js');
 
 app.post('/login', userController.login);
 app.post('/register', userController.register);
-app.post('/add-friend', userController.addFriend)
-app.post('/remove-friend', userController.removeFriend)
-app.post('/friend-requests', userController.friendRequests)
+app.post('/add-friend', userController.addFriend);
+app.post('/remove-friend', userController.removeFriend);
+app.post('/friend-requests', userController.friendRequests);
+app.post('/blocked-users', userController.blockedUsers);
 
 // app.listen(80);
 httpServer.listen(80);

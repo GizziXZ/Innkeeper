@@ -17,6 +17,7 @@
                 <div id="friend-context-menu" class="context-menu">
                     <ul>
                         <li id="remove-friend" onclick="removeFriend()">Remove Friend</li>
+                        <li id="block-user" onclick="blockUser()">Block User</li>
                     </ul>
                 </div>
                 <div id="group-context-menu" class="context-menu">
@@ -29,6 +30,7 @@
                 <h4><%=username%></h4>
                 <button class="friends-button" onclick="friends()">Friend Requests <span class="notification-circle"></span></button>
                 <button class="add-user-button" onclick="addUser()">Add User</button>
+                <button class="blocked-users-button" onclick="blockedUsers()">Blocked</button>
             </div>
         </aside>
         <main class="content">
@@ -94,6 +96,16 @@
             <h2>Friend Requests</h2>
             <ul>
                 <!-- <li>Request</li> -->
+            </ul>
+        </div>
+    </div>
+
+    <div id="blockedModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Blocked Users</h2>
+            <ul>
+                <!-- <li>Blocked</li> -->
             </ul>
         </div>
     </div>
@@ -890,6 +902,7 @@
 
                 const friends = await response.json();
                 const friendRequestsList = document.querySelector('#friendsModal ul');
+                friendRequestsList.innerHTML = ''; // Clear existing list items
 
                 friends.forEach(friend => { // for every friend in the list, create a list item and append it to the friendRequestsList
                     const li = document.createElement('li');                    
@@ -1019,6 +1032,89 @@
                 form.appendChild(label);
                 form.appendChild(document.createElement('br'));
             });
+        }
+
+        async function blockUser() {
+            try {
+                const contextMenu = document.getElementById('friend-context-menu');
+                const response = await fetch('/blocked-users', {
+                    method: 'POST',
+                    credentials: "include",
+                    body: `user=${encodeURIComponent(contextMenu.friend)}`,
+                    headers: {
+                        'Content-type': 'application/x-www-form-urlencoded',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to block user');
+                }
+
+                localFriends = localFriends.filter(f => f !== contextMenu.friend);
+                contextMenu.style.display = 'none';
+                refresh();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function blockedUsers() {
+            document.getElementById('blockedModal').style.display = 'block';
+            try {
+                const response = await fetch('/blocked-users', {
+                    method: 'GET',
+                    credentials: "include",
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch blocked users');
+                }
+
+                const blockedUsers = await response.json();
+                const blockedUsersList = document.querySelector('#blockedModal ul');
+
+                blockedUsers.forEach(user => {
+                    const li = document.createElement('li');
+                    li.textContent = user;
+
+                    const unblockButton = document.createElement('button');
+                    unblockButton.textContent = 'Unblock';
+                    unblockButton.classList.add('friend-request-button');
+                    unblockButton.addEventListener('click', () => unblockUser(user));
+
+                    li.appendChild(unblockButton);
+                    blockedUsersList.appendChild(li);
+                });
+
+                if (blockedUsers.length === 0) {
+                    const li = document.createElement('li');
+                    li.textContent = 'No blocked users';
+                    blockedUsersList.appendChild(li);
+                }
+            } catch(err) {
+                console.error(err);
+            }
+        }
+
+        async function unblockUser(username) {
+            try {
+                const response = await fetch('/blocked-users', {
+                    method: 'POST',
+                    credentials: "include",
+                    body: `user=${encodeURIComponent(username)}`,
+                    headers: {
+                        'Content-type': 'application/x-www-form-urlencoded',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to unblock user');
+                }
+
+                blockedUsers(); // refresh the blocked users
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         function addUser() { // used to display the add friend modal
