@@ -88,9 +88,9 @@ module.exports = (io) => {
 
     router.post('/login', userController.login);
     router.post('/register', userController.register);
-    router.post('/add-friend', (req, res) => userController.addFriend(req, res, io));
-    router.post('/remove-friend', (req, res) => userController.removeFriend(req, res, io));
-    router.post('/friend-requests', (req, res) => userController.friendRequests(req, res, io));
+    router.post('/add-friend', userController.addFriend);
+    router.post('/remove-friend', userController.removeFriend);
+    router.post('/friend-requests', userController.friendRequests);
     router.post('/blocked-users', userController.blockedUsers);
 
     return router;

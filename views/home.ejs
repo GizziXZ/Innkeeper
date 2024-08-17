@@ -668,6 +668,7 @@
         function checkExpiredMessages() {
             db.transaction(['keys'], 'readonly').objectStore('keys').get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = (event) => {
                 if (!event.target.result) return;
+                if (!event.target.result.settings) event.target.result.settings = {autoDeleteMessages: 'never'}; 
                 const expirationPeriod = event.target.result.settings.autoDeleteMessages;
                 if (expirationPeriod === 'never') return; // if the expiration period is set to never, don't do anything
                 const expirationTime = parseExpirationPeriod(expirationPeriod);

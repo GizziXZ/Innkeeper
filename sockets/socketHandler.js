@@ -3,6 +3,7 @@ const { v4: uuid } = require('uuid');
 const User = require('../models/users');
 const config = require('../config.json');
 
+let ioInstance;
 const userSockets = {};
 
 async function handleUserConnection(socket, io) { // when a user connects, update their online status and tell their friends that they are online
@@ -22,6 +23,7 @@ async function handleUserConnection(socket, io) { // when a user connects, updat
 }
 
 function initializeSocket(io) {
+    ioInstance = io;
     io.on('connection', async (socket) => {
         try {
             socket.username = jwt.verify(socket.handshake.auth.token, config.jwtSecret).username;
@@ -197,6 +199,12 @@ function initializeSocket(io) {
             console.error(err);
         }
     });
+    return io;
 }
 
-module.exports = initializeSocket;
+function emitToUser(username, event, data) {
+    let io = ioInstance;
+    if (userSockets[username]) io.to(userSockets[username]).emit(event, data);
+}
+
+module.exports = {initializeSocket, emitToUser};

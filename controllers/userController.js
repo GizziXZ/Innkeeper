@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const config = require('../config.json');
 const jwt = require('jsonwebtoken');
+const { emitToUser } = require('../sockets/socketHandler');
 
 /**
  * @typedef {import('mongoose').Model} UserModel
@@ -70,7 +71,7 @@ exports.register = async (req, res) => {
     }
 }
 
-exports.addFriend = async (req, res, io) => {
+exports.addFriend = async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -82,7 +83,7 @@ exports.addFriend = async (req, res, io) => {
         if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
             friend.friendRequests.push(username);
             await friend.save();
-            io.to(friendUsername).emit('friend-request', username);
+            emitToUser(friendUsername, 'friend-request');
             return res.status(200).send();
         } else if (user.friendRequests.includes(friendUsername)) { // if the friend has already sent a friend request to the user, then accept the friend request
             user.friends.push(friendUsername);
@@ -91,7 +92,8 @@ exports.addFriend = async (req, res, io) => {
             friend.friendRequests = friend.friendRequests.filter(f => f !== username);
             await user.save();
             await friend.save();
-            io.to(friendUsername).emit('refresh');
+            emitToUser(friendUsername, 'refresh');
+            emitToUser(username, 'refresh');
             return res.status(200).send();
         } else if (friend.friendRequests.includes(username)) {
             // do nothing
@@ -105,7 +107,7 @@ exports.addFriend = async (req, res, io) => {
     }
 }
 
-exports.removeFriend = async (req, res, io) => {
+exports.removeFriend = async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -115,7 +117,7 @@ exports.removeFriend = async (req, res, io) => {
         friend.friends = friend.friends.filter(f => f !== username);
         await user.save();
         await friend.save();
-        io.to(friendUsername).emit('refresh');
+        emitToUser(friendUsername, 'refresh');
         return res.status(200).send();
     } catch (err) {
         console.error(err);
@@ -123,7 +125,7 @@ exports.removeFriend = async (req, res, io) => {
     }
 }
 
-exports.friendRequests = async (req, res, io) => {
+exports.friendRequests = async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -137,7 +139,7 @@ exports.friendRequests = async (req, res, io) => {
             friend.friendRequests = friend.friendRequests.filter(f => f !== username); // not necessary but just to be safe
             await user.save();
             await friend.save();
-            io.to(friendUsername).emit('refresh');
+            emitToUser(friendUsername, 'refresh');
             return res.status(200).send();
         } else { // if the user declines the friend request
             const user = await User.findOne({ username });
@@ -167,6 +169,7 @@ exports.blockedUsers = async (req, res) => {
                 const blockedFriend = await User.findOne({ username: blockedUser });
                 blockedFriend.friends = blockedFriend.friends.filter(f => f !== username);
                 await blockedFriend.save();
+                emitToUser(blockedUser, 'refresh');
             }
         }
         await user.save();
