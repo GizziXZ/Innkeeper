@@ -14,7 +14,6 @@ const User = require('../models/users');
 exports.login = async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
-
     try {
         const user = await User.findOne({ username })
         if (user) {
@@ -39,7 +38,6 @@ exports.login = async (req, res) => {
 exports.register = async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
-
     if (!username.length || username.substring(0,1) === ' ' || !username.replace((/\s/g, '').length) || username.includes('-')) { // If username is empty or starts with a space or is all spaces then return error
         const usernameError = 'Username must be atleast 1 character, not start with a space or be all spaces or include a hyphen.'
         return res.render('register', {usernameError})
@@ -75,12 +73,12 @@ exports.register = async (req, res) => {
 exports.addFriend = async (req, res, io) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
-    
     try {
         const user = await User.findOne({ username });
         const friend = await User.findOne({ username: friendUsername });
         if (!user || !friend) return res.status(404).send();
         if (username === friendUsername) return res.status(400).send();
+        if (friend.blocked && friend.blocked.includes(username)) return res.status(403).send(); // the user is blocked by the friend
         if (!friend.friends.includes(username) && !user.friends.includes(friendUsername) && !user.friendRequests.includes(friendUsername) && !friend.friendRequests.includes(username)) { // if the user is not already friends with the friend, the friend is not already friends with the user, the user has not already sent a friend request to the friend, and the friend has not already sent a friend request to the user
             friend.friendRequests.push(username);
             await friend.save();
@@ -110,7 +108,6 @@ exports.addFriend = async (req, res, io) => {
 exports.removeFriend = async (req, res, io) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
-    
     try {
         const user = await User.findOne({ username });
         const friend = await User.findOne({ username: friendUsername });

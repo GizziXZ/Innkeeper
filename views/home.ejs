@@ -982,7 +982,7 @@
             }
         }
 
-        function leaveGroupchat() { // NOTE - convert to http later
+        function leaveGroupchat() { // the reason this is socket.emit and not fetch is because this is to leave the room on socket.io, using fetch would not be as efficient
             try {
                 const contextMenu = document.getElementById('group-context-menu');
                 const groupName = contextMenu.group;
@@ -1140,14 +1140,15 @@
                 })
                 
                 if (response.ok) {
-                    alert('User ' + username + ' added!');
+                    alert(`User ${username} added!`);
                 } else if (response.status === 404) {
-                    alert('User ' + username + ' not found!');
+                    alert(`User ${username} not found!`);
                 } else if (response.status === 400) {
-                    alert('User ' + username + ' is already a friend!');
+                    alert(`User ${username} is already a friend!`);
                 } else {
-                    alert('Error adding user ' + username);
+                    alert('Trouble adding user ' + username);
                 }
+                document.getElementById('usernameInput').value = '';
                 closeModal();
             }
         }

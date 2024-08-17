@@ -109,8 +109,8 @@ function initializeSocket(io) {
                         message.sender = socket.username;
                         message.id = uuid();
                         const friend = await User.findOne({ username: recipient });
-                        if (!friend.friends.includes(socket.username)) return;
                         const room = [socket.username, recipient].sort().join('-');
+                        if (!friend.friends.includes(socket.username)) return socket.leave(room); // check if the user is friends with the recipient
                         io.to(room).emit('message', message);
                         if ((await io.in(room).fetchSockets()).length < 2) {
                             return callback({ error: 'The recipient is offline', message });
