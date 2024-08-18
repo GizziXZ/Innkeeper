@@ -86,7 +86,7 @@
             <h2>Your Profile</h2>
             <h3>
                 Profile picture: <input type="file" id="profilePicture" accept="image/*" onchange="uploadProfilePicture(event)"><br>
-                <img id="profilePicturePreview" style="max-width: 100px; max-height: 100px; border-radius: 50%; object-fit: contain;"><br>
+                <img id="profilePicturePreview" style="max-width: 100px; max-height: 100px; border-radius: 50%; object-fit: contain; float: left; margin-right: 10px;"><br>
                 Set a custom status: <input type="text" id="statusInput" placeholder="Enter status" autocomplete="off" maxlength="64" onblur="saveStatus()">
             </h3>
         </div>
@@ -151,6 +151,7 @@
         });
         const { subtle } = window.crypto;
         let localFriends = []; // array to store friends locally
+        const profilePicturesCache = {}; // cache for profile pictures
         let db;
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
@@ -425,11 +426,15 @@
                 return text.replace(urlPattern, '<a href="$1" target="_blank">$1</a>');
             }
 
+            const profilePictureData = profilePicturesCache[message.sender];
+            const profilePictureHTML = profilePictureData ? `<img src="${profilePictureData}" style="width: 30px; height: 30px; border-radius: 50%;">` : '';
+
             let messageHTML = `<div class="message-header">
-                    <span class="message-user">${message.sender}</span>
-                    <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
-                    </div>
-                    <p class="message-content" id="${message.id}">${messageText}</p>`;
+                ${profilePictureHTML}
+                <span class="message-user">${message.sender}</span>
+                <span class="message-time">${message.date.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}</span>
+                </div>
+                <p class="message-content" id="${message.id}">${messageText}</p>`;
             if (message.media.startsWith('data:image/')) messageHTML = messageHTML + `<img src="${message.media}" style="max-width: 25vw; max-height: 25vh; object-fit: contain;">`;
             if (message.media.startsWith('data:video/')) messageHTML = messageHTML + `<video src="${message.media}" style="max-width: 30vw; max-height: 30vh; object-fit: contain;" controls></video>`;
             return messageHTML;
@@ -469,7 +474,7 @@
                         data.text = String.fromCharCode.apply(null, new Uint8Array(encryptedText));
                     };
                     if (encrypted.byteLength > 1e7) return alert('File is too large!'); // if the file is too large, don't send it
-                    socket.emit('message', data, (response) => {
+                    socket.emit('message', data, async (response) => {
                         if (response.error) return console.error('Failed to send image:', response.error);
                         messageInput.value = ''; // clear the input field
                         if (rawText) response.text = rawText;
@@ -603,7 +608,7 @@
         }
         
         async function receiveMessage(message, senderKey) {
-            if (message.sender === document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // don't receive the message if it's from the current user (because we are already managing the message in the sendMessage function)
+            if (message.sender === document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return message; // don't receive the message if it's from the current user (because we are already managing the message in the sendMessage function)
             return new Promise((resolve, reject) => {
                 db.transaction(['keys'], 'readonly').objectStore('keys').get(senderKey).onsuccess = async (event) => {
                     if (!event.target.result) return; // if the key doesn't exist, don't do anything
@@ -679,6 +684,7 @@
                     resolve(message);
                 };
             })
+            return message;
         }
 
         function saveMessage(message, username) { // save the message in the indexedDB (essentially local storage)
@@ -950,6 +956,7 @@
                 localFriends = friends; // store the friends locally
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     getStatus(friend);
+                    fetchProfilePicture(username);
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
                     const request = store.get(friend);
@@ -1135,14 +1142,40 @@
             }
         }
 
+        async function fetchProfilePicture(username) {
+            if (profilePicturesCache[username]) return profilePicturesCache[username];
+            try {
+                const response = await fetch(`/profile-picture?user=${username}`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch profile picture');
+                }
+
+                const data = await response.json();
+                const dataUrl = `data:${data.contentType};base64,${data.data}`;
+                profilePicturesCache[username] = dataUrl;
+                return dataUrl;
+            } catch (err) {
+                console.error('Error fetching profile picture:', err);
+                return null;
+            }
+        }
+
         function Profile() {
             try {
                 const profileModal = document.getElementById('profileModal');
                 const transaction = db.transaction(['keys'], 'readwrite');
                 const store = transaction.objectStore('keys');
                 store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
-                    profileModal.style.display = 'block';
                     document.getElementById('statusInput').value = event.target.result.status || '';
+                    const response = await fetch('/profile-picture', {
+                        method: 'GET',
+                        credentials: "include",
+                    });
+
+                    const data = await response.json();
+                    const dataUrl = `data:${data.contentType};base64,${data.data}`;
+                    document.getElementById('profilePicturePreview').src = dataUrl || '';
+                    profileModal.style.display = 'block';
                 }
             } catch(err) {
                 console.error('Failed to fetch profile:', err);

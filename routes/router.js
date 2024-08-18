@@ -98,6 +98,26 @@ module.exports = (io) => {
         }
     });
 
+    router.get('/profile-picture', async (req, res) => {
+        const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+        try {
+            if (!req.query.user) {
+                const user = await User.findOne({ username });
+                if (!user) return res.status(404).send();
+                if (!user.profilePicture) return res.status(204).send();
+                return res.status(200).send(user.profilePicture);
+            } else {
+                const user = await User.findOne({ username: req.query.user });
+                if (!user) return res.status(404).send();
+                if (!user.profilePicture) return res.status(204).send();
+                return res.status(200).send(user.profilePicture);
+            }
+        } catch(err) {
+            console.error(err);
+            return res.status(500).send();
+        }
+    });
+
     // Controllers
     const userController = require('../controllers/userController.js');
 
