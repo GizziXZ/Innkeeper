@@ -20,8 +20,6 @@ const httpServer = http.createServer(app);
 const httpsServer = https.createServer(credentials, app);
 const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik eval isn't a good idea, but it's safe here) if using localhost, use httpServer here instead of httpsServer. maxHttpBufferSize is changed to be able to send larger files (1e7 = 10MB)
 
-// TODO - discord emojis + chat improvements
-
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -41,9 +39,12 @@ app.use(require('./middleware/checkExpiration.js'));
 app.use(fileupload());
 
 // Routes
-const createRouter = require('./routes/router.js');
-const userRoutes = createRouter(io);
+const userRoutes = require('./routes/router.js');
 app.use(userRoutes);
+
+// usercontroller
+const userController = require('./controllers/userController.js');
+app.use(userController);
 
 // app.listen(80);
 httpServer.listen(80);

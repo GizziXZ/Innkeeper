@@ -1,7 +1,12 @@
 # Innkeeper
-~~*(screenshots here after the project is entirely done, hopefully)*~~
+### UI
+![image](https://github.com/user-attachments/assets/50e60f51-9144-47e8-a928-c4c2a54c03e7)
 
-**Discord-like End to End Encrypted messaging service**
+### images, gifs, videos and custom status messages
+![image](https://github.com/user-attachments/assets/6ac43ef1-44f3-4507-b711-3c71cef6abcb)
+
+
+### **Discord-like End to End Encrypted messaging service**
 
 I locked discord and signal in a room and forced them to have a child and I came out with Innkeeper, a private messaging service where none of your messages (encrypted and/or unencrypted) are saved on the server. best of all, the server never even has your private key in the first place, only your public key is saved to a database.
 
@@ -37,6 +42,17 @@ your keypair will be regenerated over the existing one and the public key on the
 
 absolutely not, i am literally a 16 year old and i don't know what i'm doing, it's probably extremely insecure in some way and i wouldn't be surprised if it is.
 
+
+# Features
+
+* Auto delete messages after a period of time
+* Set a profile picture
+* Set a custom status message
+* Send any type of media, entirely encrypted (you can also zoom in by clicking on a picture or gif like on discord!)
+* Create end to end encrypted groupchats with friends
+* Block users to prevent them from being able to send you a friend request
+* (almost) the same emoji system discord uses, you can use colons to use a specific emoji while typing like :pensive: (😔) or you can use the emoji picker tab. Innkeeper also uses the same emoji art as discord
+* and of course, end to end encryption using hybrid encryption
 
 # Setting it up
 

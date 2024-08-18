@@ -440,12 +440,11 @@
         }
 
         function getMessageHTML(message) { // get the default HTML for a message
-            let messageText = message.text;
+            let messageText = message.text || '';
             if (!message.sender) message.sender = document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent;
             if (!message.date) message.date = new Date();
             if (!message.media) message.media = '';
-            if (!message.text) message.text = '';
-            else messageText = linkify(message.text); // linkify the message
+            if (messageText) messageText = linkify(message.text); // linkify the message
 
             function linkify(text) { // convert URLs in the message to clickable links
                 const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig; // yeah btw i have no idea what this regex is, as far as i know it's just magic
@@ -1305,6 +1304,7 @@
         let capturingEmoji = false;
         let previousInputLength = 0;
 
+        // this is used to handle the emoji input in the message input field
         function handleEmojiInput() { // sorry for the mess of comments and stuff, this was pretty complicated
             const input = event.target.value;
             const lastChar = input.slice(-1); // Get the last character of the input
@@ -1354,6 +1354,7 @@
             }
         }
 
+        // opens the emoji picker tab
         function toggleEmojiPicker() {
             const emojiPicker = document.getElementById('emoji-picker');
             if (emojiPicker.style.display === 'none') {
@@ -1363,6 +1364,7 @@
             }
         }
 
+        // puts the emojis in the emoji picker
         async function populateEmojiPicker() {
             const emojiList = document.getElementById('emoji-list');
             const emojisFetch = await fetch('/emojis.json');
@@ -1378,12 +1380,14 @@
             });
         }
 
+        // puts the emoji in the message input field from the emoji picker
         function insertEmoji(emoji) {
             const messageInput = document.getElementById('messageInput');
             messageInput.value += emoji.emoji;
             messageInput.focus();
         }
 
+        // filters the emojis in the emoji picker for the search bar
         function filterEmojis() {
             const searchValue = document.getElementById('emoji-search').value.toLowerCase();
             const emojiList = document.getElementById('emoji-list');
@@ -1399,6 +1403,7 @@
                 emojiButton.classList.add('emoji-button');
                 emojiButton.onclick = () => insertEmoji(emojiObj.emoji);
                 emojiList.appendChild(emojiButton);
+                twemoji.parse(emojiButton);
             });
         }
         

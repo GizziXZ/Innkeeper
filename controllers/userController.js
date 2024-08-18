@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const config = require('../config.json');
 const jwt = require('jsonwebtoken');
+const router = require('../routes/router');
 const { emitToUser } = require('../sockets/socketHandler');
 
 /**
@@ -12,7 +13,7 @@ const { emitToUser } = require('../sockets/socketHandler');
  */
 const User = require('../models/users');
 
-exports.login = async (req, res) => {
+router.post('/login', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
     try {
@@ -34,9 +35,9 @@ exports.login = async (req, res) => {
         console.error(err);
         res.status(500).send('Internal Server Error');
     }
-}
+});
 
-exports.register = async (req, res) => {
+router.post('/register', async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
     if (!username.length || username.substring(0,1) === ' ' || !username.replace((/\s/g, '').length) || username.includes('-')) { // If username is empty or starts with a space or is all spaces then return error
@@ -69,9 +70,9 @@ exports.register = async (req, res) => {
             res.status(500).send('Internal Server Error');
         }
     }
-}
+});
 
-exports.addFriend = async (req, res) => {
+router.post('/add-friend', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -105,9 +106,9 @@ exports.addFriend = async (req, res) => {
         console.error(err)
         return res.status(500).send();
     }
-}
+});
 
-exports.removeFriend = async (req, res) => {
+router.post('/remove-friend', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -123,9 +124,9 @@ exports.removeFriend = async (req, res) => {
         console.error(err);
         return res.status(500).send();
     }
-}
+});
 
-exports.friendRequests = async (req, res) => {
+router.post('/friend-requests', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const friendUsername = req.body.friend;
     try {
@@ -151,9 +152,9 @@ exports.friendRequests = async (req, res) => {
         console.error(err);
         return res.status(500).send();
     }
-}
+});
 
-exports.blockedUsers = async (req, res) => {
+router.post('/blocked-users', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     const blockedUser = req.body.user;
     try {
@@ -178,9 +179,9 @@ exports.blockedUsers = async (req, res) => {
         console.error(err);
         return res.status(500).send();
     }
-}
+});
 
-exports.uploadProfilePicture = async (req, res) => {
+router.post('/upload-profile-picture', async (req, res) => {
     const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
     try {
         const profilePicture = req.files.profilePicture;
@@ -195,4 +196,6 @@ exports.uploadProfilePicture = async (req, res) => {
         console.error(err);
         return res.status(500).send();
     }
-}
+});
+
+module.exports = router;
