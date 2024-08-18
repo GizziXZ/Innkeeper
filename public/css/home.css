@@ -334,6 +334,36 @@ footer .emoji:hover {
         transform: translateY(0);
     }
 }
+.emoji-picker {
+    position: absolute;
+    bottom: 60px;
+    right: 10px;
+    background: #2f3136;
+    border: 1px solid #202225;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    z-index: 1000;
+    max-width: 250px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.emoji-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #dcddde;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.emoji-button:hover {
+    background: #40444b;
+}
 
 .friends-button {
     background-color: #5865f2;

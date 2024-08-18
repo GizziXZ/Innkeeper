@@ -76,6 +76,10 @@
                 <a id="emojis" onclick="toggleEmojiPicker()">🗣️</a>
                 <input id="fileInput" type="file" accept="image/*,video/*" style="display: none;" onchange="uploadMedia(event)">
                 <button id="upload" onclick="document.getElementById('fileInput').click()" disabled>+</button>
+                <div id="emoji-picker" class="emoji-picker" style="display: none;">
+                    <input type="text" id="emoji-search" placeholder="Search emojis..." oninput="filterEmojis()">
+                    <div id="emoji-list"></div>
+                </div>
             </footer>
         </main>
     </div>
@@ -158,6 +162,8 @@
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
+
+        document.addEventListener('DOMContentLoaded', populateEmojiPicker);
 
         twemoji.parse(document.getElementById('emojis'), {
             folder: 'svg',
@@ -1291,6 +1297,57 @@
             } catch (err) {
                 console.error(err);
             }
+        }
+
+
+        function toggleEmojiPicker() {
+            const emojiPicker = document.getElementById('emoji-picker');
+            if (emojiPicker.style.display === 'none') {
+                emojiPicker.style.display = 'block';
+            } else {
+                emojiPicker.style.display = 'none';
+            }
+        }
+
+        let emojis;
+
+        async function populateEmojiPicker() {
+            const emojiList = document.getElementById('emoji-list');
+            let emojisFetch = await fetch('/emojis.json');
+            emojis = await emojisFetch.json();
+            emojis = emojis.emojis;
+            emojis.forEach(emoji => {
+                const emojiButton = document.createElement('button');
+                emojiButton.innerHTML = emoji.emoji;
+                emojiButton.classList.add('emoji-button');
+                emojiButton.onclick = () => insertEmoji(emoji);
+                emojiList.appendChild(emojiButton);
+                twemoji.parse(emojiButton);
+            });
+        }
+
+        function insertEmoji(emoji) {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value += emoji;
+            messageInput.focus();
+        }
+
+        function filterEmojis() {
+            const searchValue = document.getElementById('emoji-search').value.toLowerCase();
+            const emojiList = document.getElementById('emoji-list');
+            emojiList.innerHTML = ''; // Clear the current list
+
+            const filteredEmojis = emojis.filter(emojiObj => {
+                return emojiObj.shortname.includes(searchValue);
+            });
+
+            filteredEmojis.forEach(emojiObj => {
+                const emojiButton = document.createElement('button');
+                emojiButton.innerText = emojiObj.emoji;
+                emojiButton.classList.add('emoji-button');
+                emojiButton.onclick = () => insertEmoji(emojiObj.emoji);
+                emojiList.appendChild(emojiButton);
+            });
         }
         
         function toggleDropdown() {
