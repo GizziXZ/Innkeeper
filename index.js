@@ -21,7 +21,6 @@ const httpsServer = https.createServer(credentials, app);
 const io = new Server(eval(config.server), {maxHttpBufferSize: 1e7}); // (yes ik eval isn't a good idea, but it's safe here) if using localhost, use httpServer here instead of httpsServer. maxHttpBufferSize is changed to be able to send larger files (1e7 = 10MB)
 
 // TODO - discord emojis + chat improvements
-// TODO - possibly voice chat soon
 
 mongoose.connect(config.mongooseConnection + 'usersDB', {
     useNewUrlParser: true,

@@ -182,6 +182,7 @@
 
         messageInput.addEventListener('input', () => { // send typing event to server
             socket.emit('typing', document.getElementById('currentChat').textContent);
+            handleEmojiInput();
         });
 
         // SECTION - initialization functions
@@ -1299,6 +1300,59 @@
             }
         }
 
+        let emojis;
+        let emojiBuffer = '';
+        let capturingEmoji = false;
+        let previousInputLength = 0;
+
+        function handleEmojiInput() { // sorry for the mess of comments and stuff, this was pretty complicated
+            const input = event.target.value;
+            const lastChar = input.slice(-1); // Get the last character of the input
+
+            // if the input is shorter than the previous input, the user has deleted a character
+            if (input.length < previousInputLength) {
+                previousInputLength = input.length;
+                emojiBuffer = emojiBuffer.slice(0, -1); // Remove the last character from the emoji buffer
+                return;
+            }
+
+            previousInputLength = input.length; // making sure it's updated
+
+            if (!input.includes(':')) { // Check if the input field contains a colon
+                capturingEmoji = false;
+                emojiBuffer = '';
+            }
+
+            if (lastChar === ':') { // Check if the last character is a colon
+                if (capturingEmoji) { // If already capturing an emoji shortname
+                    emojiBuffer += lastChar; // Add the colon to the emoji buffer
+                    const emoji = emojis.find(emoji => emoji.shortname == emojiBuffer); // find the emoji object with a matching shortname
+                    if (emoji) {
+                        event.target.value = input.slice(0, -emojiBuffer.length) + emoji.emoji; // replace the shortname with the emoji
+                        capturingEmoji = false;
+                        emojiBuffer = '';
+                    } else { // If no matching emoji is found, reset
+                        capturingEmoji = false;
+                        emojiBuffer = '';
+                    }
+                } else { // If not already capturing an emoji shortname
+                    capturingEmoji = true; // start capturing
+                    emojiBuffer = lastChar;
+                }
+            } else if (capturingEmoji) { // If capturing an emoji shortname
+                if (lastChar.match(/\s/)) { // Check if the last character is a whitespace, if it is, reset
+                    capturingEmoji = false;
+                    emojiBuffer = '';
+                } else { // If the last character is not a whitespace
+                    emojiBuffer += lastChar; // Add the character to the emoji buffer
+                }
+            }
+
+            if (input === '') { // If the input field is empty, reset
+                capturingEmoji = false;
+                emojiBuffer = '';
+            }
+        }
 
         function toggleEmojiPicker() {
             const emojiPicker = document.getElementById('emoji-picker');
@@ -1309,11 +1363,9 @@
             }
         }
 
-        let emojis;
-
         async function populateEmojiPicker() {
             const emojiList = document.getElementById('emoji-list');
-            let emojisFetch = await fetch('/emojis.json');
+            const emojisFetch = await fetch('/emojis.json');
             emojis = await emojisFetch.json();
             emojis = emojis.emojis;
             emojis.forEach(emoji => {
@@ -1328,7 +1380,7 @@
 
         function insertEmoji(emoji) {
             const messageInput = document.getElementById('messageInput');
-            messageInput.value += emoji;
+            messageInput.value += emoji.emoji;
             messageInput.focus();
         }
 
