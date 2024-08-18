@@ -73,6 +73,7 @@
             <p id="typingIndicator"></p>
             <footer>
                 <input id="messageInput" type="text" placeholder="Type a message..." autocomplete="off" disabled>
+                <a id="emojis" onclick="toggleEmojiPicker()">🗣️</a>
                 <input id="fileInput" type="file" accept="image/*,video/*" style="display: none;" onchange="uploadMedia(event)">
                 <button id="upload" onclick="document.getElementById('fileInput').click()" disabled>+</button>
             </footer>
@@ -142,6 +143,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script> // SECTION - Client-side JavaScript
         let refreshPromise = null;
         var socket = io({ // connect to the server
@@ -156,6 +158,11 @@
         let userPrivateKey, userPublicKey;
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.querySelector('.messages');
+
+        twemoji.parse(document.getElementById('emojis'), {
+            folder: 'svg',
+            ext: '.svg'
+        });
 
         document.getElementsByClassName('messages')[0].addEventListener('click', () => { // focus on the chat input when clicking in the messages, for convenience
             messageInput.focus();
@@ -504,6 +511,10 @@
                         messageElement.classList.add('message');
                         response.media = media;
                         messageElement.innerHTML = getMessageHTML(response);
+                        twemoji.parse(messageElement, {
+                            folder: 'svg',
+                            ext: '.svg'
+                        });
                         messagesContainer.appendChild(messageElement);
                         const imgElement = messageElement.querySelector('img');
                         if (imgElement) {
@@ -686,6 +697,10 @@
                         return;
                     }
                     messageElement.innerHTML = getMessageHTML(message);
+                    twemoji.parse(messageElement, {
+                        folder: 'svg',
+                        ext: '.svg'
+                    });
                     messagesContainer.appendChild(messageElement);
                     if (message.media) {
                         const imgElement = messageElement.querySelector('img');
@@ -807,6 +822,10 @@
                             const messageElement = document.createElement('div');
                             messageElement.classList.add('message');
                             messageElement.innerHTML = getMessageHTML(message);
+                            twemoji.parse(messageElement, {
+                                folder: 'svg',
+                                ext: '.svg'
+                            });
                             messagesContainer.appendChild(messageElement);
                             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                             messageInput.value = ''; // clear the input field
@@ -815,7 +834,11 @@
                             const message = response;
                             const messageElement = document.createElement('div');
                             messageElement.classList.add('message');
-                            messageElement.innerHTML = getMessageHTML(response);;
+                            messageElement.innerHTML = getMessageHTML(response);
+                            twemoji.parse(messageElement, {
+                                folder: 'svg',
+                                ext: '.svg'
+                            });
                             messagesContainer.appendChild(messageElement);
                             messagesContainer.scrollTop = messagesContainer.scrollHeight; // scroll to the bottom of the messages
                             messageInput.value = ''; // clear the input field
@@ -851,7 +874,11 @@
                         if (message.sender !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent && message.recipient !== document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent) return; // only show messages that are sent to or from the current user
                         const messageElement = document.createElement('div');
                         messageElement.classList.add('message');
-                        messageElement.innerHTML = getMessageHTML(message);;
+                        messageElement.innerHTML = getMessageHTML(message);
+                        twemoji.parse(messageElement, {
+                            folder: 'svg',
+                            ext: '.svg'
+                        });
                         messagesContainer.appendChild(messageElement);
                         if (message.media) {
                             const imgElement = messageElement.querySelector('img');
@@ -883,7 +910,7 @@
                 const modalMedia = document.createElement('div');
                 modalMedia.id = 'modalMedia';
                 document.body.addEventListener('click', (event) => { // "event delegation" or whatever the fuck that means
-                    if (event.target.tagName === 'IMG' && event.target.id !== 'modalMedia') {
+                    if (event.target.tagName === 'IMG' && event.target.id !== 'modalMedia' && event.target.getAttribute('class') !== 'emoji') {
                         modal.style.display = 'block';
                         const img = document.createElement('img')
                         img.classList.add('media-modal')

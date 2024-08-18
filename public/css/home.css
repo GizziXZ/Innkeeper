@@ -28,6 +28,13 @@ body {
     width: 100%;
 }
 
+.emoji {
+    max-width: 32px;
+    max-height: 32px;
+    margin: 0 7px;
+    vertical-align: middle;
+}
+
 .sidebar {
     width: 15%;
     background-color: #2f3136;
@@ -300,7 +307,7 @@ footer {
 }
 
 footer input {
-    width: 96.5%;
+    width: 93.5%;
     padding: 8px;
     border: none;
     border-radius: 5px;
@@ -308,8 +315,24 @@ footer input {
     color: #dcddde;
 }
 
-footer input:focus {
-    outline: 2px solid #707070;
+footer .emoji {
+    cursor: pointer;
+}
+
+footer .emoji:hover {
+    animation: bounce 0.4s;
+}
+
+@keyframes bounce {
+    0% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+    100% {
+        transform: translateY(0);
+    }
 }
 
 .friends-button {
