@@ -85,6 +85,8 @@
             <span class="close" onclick="closeModal()">&times;</span>
             <h2>Your Profile</h2>
             <h3>
+                Profile picture: <input type="file" id="profilePicture" accept="image/*" onchange="uploadProfilePicture(event)"><br>
+                <img id="profilePicturePreview" style="max-width: 100px; max-height: 100px; border-radius: 50%; object-fit: contain;"><br>
                 Set a custom status: <input type="text" id="statusInput" placeholder="Enter status" autocomplete="off" maxlength="64" onblur="saveStatus()">
             </h3>
         </div>
@@ -496,6 +498,45 @@
             reader.readAsDataURL(file);
             event.target.value = ''; // resetting the input value so the same file can be uploaded again
             return;
+        }
+
+        async function uploadProfilePicture(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) {
+                event.target.value = '';
+                return alert('File is larger than 5MB');
+            }
+
+            // showing the image preview in the modal
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('profilePicturePreview');
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            const formData = new FormData();
+            formData.append('profilePicture', file);
+
+            try {
+                const response = await fetch('/upload-profile-picture', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: "include",
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to upload profile picture');
+                }
+
+                const data = await response.json();
+                const profilePictureUrl = data.url;
+                document.getElementById('profilePicturePreview').src = profilePictureUrl;
+            } catch (err) {
+                console.error('Error uploading profile picture:', err);
+            }
         }
 
         async function createGroupchat() {

@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
+const fileupload = require('express-fileupload');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use(cookieParser());
 app.use(express.static(__dirname + '/public'));
 app.use(require('./middleware/refreshToken.js'));
 app.use(require('./middleware/checkExpiration.js'));
+app.use(fileupload());
 
 // Routes
 const createRouter = require('./routes/router.js');

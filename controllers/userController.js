@@ -176,5 +176,23 @@ exports.blockedUsers = async (req, res) => {
         return res.status(200).send();
     } catch(err) {
         console.error(err);
+        return res.status(500).send();
+    }
+}
+
+exports.uploadProfilePicture = async (req, res) => {
+    const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+    try {
+        const profilePicture = req.files.profilePicture;
+        if (!profilePicture) return res.status(400).send();
+        if (profilePicture.mimetype !== 'image/png' && profilePicture.mimetype !== 'image/jpeg') return res.status(400).send();
+        if (profilePicture.size > 5e6) return res.status(400).send(); // if the file is larger than 5MB
+        const user = await User.findOne({ username });
+        user.profilePicture = profilePicture;
+        await user.save();
+        return res.status(200).send();
+    } catch (err) {
+        console.error(err);
+        return res.status(500).send();
     }
 }

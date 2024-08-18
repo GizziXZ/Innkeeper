@@ -40,6 +40,8 @@ absolutely not, i am literally a 16 year old and i don't know what i'm doing, it
 
 # Setting it up
 
+Make sure you have [Nodejs](https://nodejs.org/en) downloaded.
+
 ## Config
 
 create a config.json and follow this template

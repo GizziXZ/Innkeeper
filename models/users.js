@@ -34,8 +34,8 @@ const UsersSchema = new mongoose.Schema({
         required: false
     },
     profilePicture: {
-        type: String,
-        default: '' // i'll add a default profile picture later, wanted to do base64 of an image but it's too long to keep here
+        type: Object,
+        default: '' // i'll add a default profile picture later
     },
     status: {
         type: String,

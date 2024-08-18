@@ -107,6 +107,7 @@ module.exports = (io) => {
     router.post('/remove-friend', userController.removeFriend);
     router.post('/friend-requests', userController.friendRequests);
     router.post('/blocked-users', userController.blockedUsers);
+    router.post('/upload-profile-picture', userController.uploadProfilePicture);
 
     return router;
 };
