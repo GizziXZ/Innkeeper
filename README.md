@@ -21,6 +21,14 @@ an AES symmetric key is generated for every chat you have, once it is generated,
 
 every message is encrypted using the shared AES symmetric key before being sent to the other user through the server, hence the end to end encryption
 
+this method of encryption is called [hybrid encryption.](https://en.wikipedia.org/wiki/Hybrid_cryptosystem)
+
+## Why are you not just encrypting everything directly with the RSA keypair, idiot
+
+because AES is more efficient than RSA and RSA is only able to encrypt data to a maximum amount equal to your key size (2048 bits = 256 bytes)
+
+this means the size of any messages you send are limited to 256 bytes if you are using RSA and you also cannot encrypt most files because of that. using AES allows you to send large files and messages.
+
 ## What happens if I login on another browser?
 
 your keypair will be regenerated over the existing one and the public key on the server will be replaced with the new one and all symmetric keys will be regenerated, this is a privacy feature.
@@ -38,15 +46,34 @@ create a config.json and follow this template
 
 ```json
     {
-        "mongooseConnection":"your.mongodb.server/",
+        "mongooseConnection":"mongodb+srv://your.mongodb.server/",
         "jwtSecret":"jsonwebtoken secret",
         "server":"httpServer or httpsServer"
     }
 ```
 
-your jwtSecret is like a password used for signing jsonwebtokens to make sure they're legit when logging in. 
+your jwtSecret is like a password used for signing jsonwebtokens to make sure they're legit when logging in.
+
 if you're going to use localhost you can set server to httpServer, if you're hosting this outside of localhost then use httpsServer and make sure you've got an ssl certificate
 
 ## Certificate
 
 make a folder named `certificate` and place your .crt and .key files inside it. (not necessary if you're going to use httpServer)
+
+## Hosting
+
+once all of that is done, make sure you have run this command inside the Innkeeper folder:
+
+```bash
+    npm i
+```
+
+and to finally run it:
+
+```bash
+    node index.js
+```
+
+# Contributions
+
+Open issues with any bugs/errors you find, you can also try to make my unreadable code better by contributing and helping with making the service more secure.

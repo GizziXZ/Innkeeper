@@ -242,7 +242,7 @@
                         }
                         store.put(data);
                     };
-                })
+                });
             });
         });
 
@@ -283,7 +283,7 @@
                     store.put(data);
                 };
             });
-        })
+        });
 
         socket.on('message', async (message) => { // receive message from server
             if (message.recipient.includes('-')) { // if the recipient is a groupchat
@@ -343,6 +343,8 @@
                 }
             }
         });
+
+        socket.on('status-update', (updatedStatus) => sessionStorage.setItem(updatedStatus.user, updatedStatus.status)); // updatedStatus is an object
         //!SECTION
 
         function savePrivateKey(username, privateKey) {
@@ -768,6 +770,7 @@
                 document.getElementById('typingIndicator').style.display = 'none'; // stop typing indicator when switching chats
                 document.getElementById('create-gc').style.display = 'block'; // show the create groupchat button
                 currentChat.textContent = name;
+                document.getElementById('status').textContent = sessionStorage.getItem(name) || ''; // set status of the user
                 messagesContainer.innerHTML = ''; // Clear existing messages
                 const messagesTransaction = db.transaction(['messages'], 'readonly');
                 const messagesStore = messagesTransaction.objectStore('messages');
@@ -905,6 +908,7 @@
                 let friends = await response.json();
                 localFriends = friends; // store the friends locally
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
+                    getStatus(friend);
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
                     const request = store.get(friend);
@@ -1066,6 +1070,27 @@
                 event.target.result.status = status;
                 store.put(event.target.result);
                 socket.emit('status', status);
+            }
+        }
+
+        async function getStatus(user) {
+            try {
+                const response = await fetch(`/status?user=${user}`, {
+                    method: 'GET',
+                    credentials: "include",
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch status');
+                }
+
+                if (response.status === 204) return ''; // if the status is empty, return an empty string
+
+                const status = await response.text();
+                sessionStorage.setItem(user, status);
+                return status;
+            } catch(err) {
+                console.error(err);
             }
         }
 

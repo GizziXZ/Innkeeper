@@ -166,6 +166,7 @@ function initializeSocket(io) {
             socket.on('status', async (status) => {
                 try {
                     status = status.slice(0, 64); // limit the status to 64 characters
+                    status = status.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/\//g, '&#x2F;'); // to prevent an exploit
                     const user = await User.findOne({ username: socket.username });
                     user.status = status;
                     await user.save();

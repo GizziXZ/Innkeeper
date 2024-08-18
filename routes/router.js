@@ -83,6 +83,21 @@ module.exports = (io) => {
         }
     });
 
+    router.get('/status', async (req, res) => {
+        const username = jwt.verify(req.cookies.token, config.jwtSecret).username;
+        try {
+            const friend = req.query.user;
+            const user = await User.findOne({ username: friend });
+            if (!user) return res.status(404).send();
+            if (!user.friends.includes(username)) return res.status(403).send();
+            if (!user.status) return res.status(204).send();
+            return res.status(200).send(user.status);
+        } catch(err) {
+            console.error(err);
+            return res.status(500).send();
+        }
+    });
+
     // Controllers
     const userController = require('../controllers/userController.js');
 
