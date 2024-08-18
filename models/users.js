@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const fs = require('fs');
 
 const UsersSchema = new mongoose.Schema({
     username: {
@@ -35,7 +36,7 @@ const UsersSchema = new mongoose.Schema({
     },
     profilePicture: {
         type: Object,
-        default: '' // i'll add a default profile picture later
+        default: JSON.parse(fs.readFileSync('./models/default-image.json', 'utf8')) // base64 default image
     },
     status: {
         type: String,

@@ -199,12 +199,16 @@ header p {
 }
 
 .message-user {
+    font-size: large;
     font-weight: bold;
+    margin-top: 8px;
+    margin-left: 5px;
 }
 
 .message-time {
     margin-right: auto;
     margin-left: 5px;
+    margin-top: 10px;
     font-size: 0.8em;
     color: #888;
 }

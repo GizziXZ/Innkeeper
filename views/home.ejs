@@ -215,6 +215,27 @@
                         });
                     });
                 };
+
+                // cache the user's profile picture
+                if (!profilePicturesCache[document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent]) {
+                        try {
+                        const response = await fetch('/profile-picture', {
+                            method: 'GET',
+                            credentials: "include",
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('Failed to load profile picture');
+                        }
+
+                        const data = await response.json();
+                        const dataUrl = `data:${data.mimetype};base64,${data.data}`;
+                        profilePicturesCache[document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent] = dataUrl;
+                        return dataUrl;
+                    } catch (err) {
+                        console.error('Error loading profile picture:', err);
+                    }
+                }
                 // console.log('Database loaded successfully');
             } catch (error) {
                 console.error('Failed to load the database:', error);
@@ -427,7 +448,7 @@
             }
 
             const profilePictureData = profilePicturesCache[message.sender];
-            const profilePictureHTML = profilePictureData ? `<img src="${profilePictureData}" style="width: 30px; height: 30px; border-radius: 50%;">` : '';
+            const profilePictureHTML = profilePictureData ? `<img src="${profilePictureData}" style="width: 40px; height: 40px; border-radius: 50%;">` : '';
 
             let messageHTML = `<div class="message-header">
                 ${profilePictureHTML}
@@ -956,7 +977,7 @@
                 localFriends = friends; // store the friends locally
                 await friends.forEach(friend => { // for every friend in the list, create a list item and append it to the chatlist
                     getStatus(friend);
-                    fetchProfilePicture(username);
+                    fetchProfilePicture(friend);
                     const transaction = db.transaction(['keys'], 'readonly');
                     const store = transaction.objectStore('keys');
                     const request = store.get(friend);
@@ -1151,7 +1172,7 @@
                 }
 
                 const data = await response.json();
-                const dataUrl = `data:${data.contentType};base64,${data.data}`;
+                const dataUrl = `data:${data.mimetype};base64,${data.data}`;
                 profilePicturesCache[username] = dataUrl;
                 return dataUrl;
             } catch (err) {
@@ -1167,15 +1188,20 @@
                 const store = transaction.objectStore('keys');
                 store.get(document.getElementsByClassName('user-actions')[0].getElementsByTagName('h4')[0].textContent).onsuccess = async (event) => {
                     document.getElementById('statusInput').value = event.target.result.status || '';
-                    const response = await fetch('/profile-picture', {
-                        method: 'GET',
-                        credentials: "include",
-                    });
+                    try {
+                        const response = await fetch('/profile-picture', {
+                            method: 'GET',
+                            credentials: "include",
+                        });
 
-                    const data = await response.json();
-                    const dataUrl = `data:${data.contentType};base64,${data.data}`;
-                    document.getElementById('profilePicturePreview').src = dataUrl || '';
-                    profileModal.style.display = 'block';
+                        profileModal.style.display = 'block';
+
+                        const data = await response.json();
+                        const dataUrl = `data:${data.mimetype};base64,${data.data}`;
+                        document.getElementById('profilePicturePreview').src = dataUrl || '';
+                    } catch(err) {
+                        console.error('Failed to fetch profile picture:', err);
+                    }
                 }
             } catch(err) {
                 console.error('Failed to fetch profile:', err);
