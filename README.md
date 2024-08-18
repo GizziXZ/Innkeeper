@@ -51,7 +51,7 @@ absolutely not, i am literally a 16 year old and i don't know what i'm doing, it
 * Send any type of media, entirely encrypted (you can also zoom in by clicking on a picture or gif like on discord!)
 * Create end to end encrypted groupchats with friends
 * Block users to prevent them from being able to send you a friend request
-* (almost) the same emoji system discord uses, you can use colons to use a specific emoji while typing like :pensive: (😔) or you can use the emoji picker tab. Innkeeper also uses the same emoji art as discord
+* (almost) the same emoji system discord uses, you can use colons to use a specific emoji while typing like : pensive : (😔) or you can use the emoji picker tab. Innkeeper also uses the same emoji art as discord
 * and of course, end to end encryption using hybrid encryption
 
 # Setting it up
