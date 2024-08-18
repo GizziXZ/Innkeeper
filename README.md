@@ -45,11 +45,11 @@ absolutely not, i am literally a 16 year old and i don't know what i'm doing, it
 create a config.json and follow this template
 
 ```json
-    {
-        "mongooseConnection":"mongodb+srv://your.mongodb.server/",
-        "jwtSecret":"jsonwebtoken secret",
-        "server":"httpServer or httpsServer"
-    }
+{
+    "mongooseConnection":"mongodb+srv://your.mongodb.server/",
+    "jwtSecret":"jsonwebtoken secret",
+    "server":"httpServer or httpsServer"
+}
 ```
 
 your jwtSecret is like a password used for signing jsonwebtokens to make sure they're legit when logging in.
@@ -65,13 +65,13 @@ make a folder named `certificate` and place your .crt and .key files inside it. 
 once all of that is done, make sure you have run this command inside the Innkeeper folder:
 
 ```bash
-    npm i
+npm i
 ```
 
 and to finally run it:
 
 ```bash
-    node index.js
+node index.js
 ```
 
 # Contributions
