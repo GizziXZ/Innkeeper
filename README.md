@@ -1,4 +1,8 @@
+![innkeeper](https://github.com/user-attachments/assets/2caee0b5-0602-4982-8c6a-2c3dec64e5d0)
+###### there is no jagged geometry, much like your security when using e2ee made by a 16 year old, you are hallucinating
 # Innkeeper
+###### no live link because i don't own a vps nor a domain, you'll have to host it out yourself :(
+
 ### UI
 ![image](https://github.com/user-attachments/assets/50e60f51-9144-47e8-a928-c4c2a54c03e7)
 
@@ -8,9 +12,15 @@
 
 ### **Discord-like End to End Encrypted messaging service**
 
+ever wished you could have your drug dealer and e-kitten in one place? (probably not. i wouldn't, if i were you)
+
+fear no more!
+
 I locked discord and signal in a room and forced them to have a child and I came out with Innkeeper, a private messaging service where none of your messages (encrypted and/or unencrypted) are saved on the server. best of all, the server never even has your private key in the first place, only your public key is saved to a database.
 
 most of the magic is done in your browser, key generation, encryption and decryption. hell, even the messages are saved in your browser. the server is essentially only used to relay information to keep your ip private (unless you click on an ip logger, that's on you)
+
+use now and keep your chats safe, because some things are just between you, your dealer, and your e-kitten.
 
 ## enough talkin, fella. how does it work?
 
