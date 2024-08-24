@@ -2,13 +2,13 @@
 ###### there is no jagged geometry, much like your security when using e2ee made by a 16 year old, you are hallucinating
 # Innkeeper
 ###### no live link because i don't own a vps nor a domain, you'll have to host it out yourself :(
+###### I am planning on bugfixing and updating this repo outside of hackclub/arcade! my friend is looking to host this with a proper domain so this WILL be getting updated eventually. feel free to open issues and contribute! :)
 
 ### UI
 ![image](https://github.com/user-attachments/assets/50e60f51-9144-47e8-a928-c4c2a54c03e7)
 
 ### images, gifs, videos and custom status messages
 ![image](https://github.com/user-attachments/assets/6ac43ef1-44f3-4507-b711-3c71cef6abcb)
-
 
 ### **Discord-like End to End Encrypted messaging service**
 
@@ -52,6 +52,7 @@ your keypair will be regenerated over the existing one and the public key on the
 
 absolutely not, i am literally a 16 year old and i don't know what i'm doing, it's probably extremely insecure in some way and i wouldn't be surprised if it is.
 
+this app is private, yes, but secure is a whole other thing. if you find vulnerabilities please let me know.
 
 # Features
 
