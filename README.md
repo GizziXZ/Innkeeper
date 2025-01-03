@@ -1,5 +1,4 @@
 ![innkeeper](https://github.com/user-attachments/assets/2caee0b5-0602-4982-8c6a-2c3dec64e5d0)
-###### there is no jagged geometry, much like your security when using e2ee made by a 16 year old, you are hallucinating
 # Innkeeper
 ###### no live link because i don't own a vps nor a domain, you'll have to host it out yourself :(
 ###### I am planning on bugfixing and updating this repo outside of hackclub/arcade! my friend is looking to host this with a proper domain so this WILL be getting updated eventually. feel free to open issues and contribute! :)
