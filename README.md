@@ -1,7 +1,6 @@
 ![innkeeper](https://github.com/user-attachments/assets/2caee0b5-0602-4982-8c6a-2c3dec64e5d0)
 # Innkeeper
-###### no live link because i don't own a vps nor a domain, you'll have to host it out yourself :(
-###### I am planning on bugfixing and updating this repo outside of hackclub/arcade! my friend is looking to host this with a proper domain so this WILL be getting updated eventually. feel free to open issues and contribute! :)
+###### this is mostly a proof of concept, I am working on a better project that will be able to function at scale, the code for this project is messy, unclean and buggy
 
 ### UI
 ![image](https://github.com/user-attachments/assets/50e60f51-9144-47e8-a928-c4c2a54c03e7)
